@@ -1,0 +1,34 @@
+{
+  "name": "yrv/autoloader",
+  "description": "Faster autoloader",
+  "type": "library",
+  "keywords": ["autoloader"],
+  "require-dev": {
+    "phpunit/phpunit": "9.5.x-dev"
+  },
+  "license": "BSD-2-Clause",
+  "autoload": {
+    "psr-4": {
+      "YRV\\Autoloader\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  },
+  "authors": [
+    {
+      "name": "Roman Yankovenko",
+      "email": "roman@yankovenko.ru"
+    }
+  ],
+  "minimum-stability": "dev",
+  "require": {
+    "php": ">=7.4.0",
+  },
+  "scripts": {
+    "test": "phpunit ./tests"
+  }
+}
+
