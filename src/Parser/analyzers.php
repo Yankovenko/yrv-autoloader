@@ -131,15 +131,18 @@ trait ComponentAnalyzerLibrary {
         return $extended;
     }
 
-    protected function extractConstants(array $tokens)
+    protected function extractConstants(array &$tokens, $delete=false)
     {
         $name = '';
         $constFound = false;
         $constants = [];
 
-        foreach ($tokens as $token) {
+        foreach ($tokens as $pos => $token) {
             if (is_array($token) && $token[0] === T_CONST) {
                 $constFound = true;
+                if ($delete) {
+                    unset($tokens[$pos]);
+                }
                 continue;
             }
 
@@ -149,6 +152,9 @@ trait ComponentAnalyzerLibrary {
 
             if (in_array($token[0], [T_STRING, T_NS_SEPARATOR], true)) {
                 $name .= $token[1];
+                if ($delete) {
+                    unset($tokens[$pos]);
+                }
                 continue;
             }
 
@@ -159,6 +165,36 @@ trait ComponentAnalyzerLibrary {
             if ($token === ';') {
                 $constFound = false;
             }
+            if ($delete) {
+                unset($tokens[$pos]);
+            }
+        }
+
+        foreach ($tokens as $pos => $token) {
+            if (is_array($token) && $token[0] === T_STRING && $token[1] == 'define') {
+                $constFound = true;
+                $name = '';
+                continue;
+            }
+
+            if (!$constFound) {
+                continue;
+            }
+
+            if (!$name && in_array($token[0], [T_CONSTANT_ENCAPSED_STRING], true)) {
+                $name = $token[1];
+                $name = trim($name, '\'"');
+                $constants[] = $name;
+            }
+
+            if ($token === ';') {
+                $name = '';
+                $constFound = false;
+            }
+
+            if ($delete) {
+                unset($tokens[$pos]);
+            }
         }
 
         return $constants;
@@ -168,10 +204,11 @@ trait ComponentAnalyzerLibrary {
     {
         $name = '';
         $useFound = false;
+        $isRedeclare = false;
         $constants = [];
 
-        foreach ($tokens as $token) {
-            if (is_array($token) && $token[0] === T_USE) {
+        foreach ($tokens as $pos => $token) {
+            if (is_array($token) && $token[0] === T_USE && !$this->checkTockenIn($tokens, $pos, 1, ['('])) {
                 $useFound = true;
                 continue;
             }
@@ -180,16 +217,30 @@ trait ComponentAnalyzerLibrary {
                 continue;
             }
 
+            if ($isRedeclare && $token !== '}') {
+                continue;
+            } elseif ($isRedeclare) {
+                $isRedeclare = false;
+                $useFound = false;
+                continue;
+            }
+
             if (in_array($token[0], [T_STRING, T_NS_SEPARATOR], true)) {
                 $name .= $token[1];
                 continue;
             }
 
-            if ($token === ',') {
+            if ($token === '{') {
+                $constants[] = $name;
+                $name = '';
+                $isRedeclare = true;
+                continue;
+            } elseif ($token === ',') {
                 $constants[] = $name;
                 $name = '';
             } elseif ($token === ';') {
                 $constants[] = $name;
+                $name = '';
                 $useFound = false;
             }
         }
@@ -303,13 +354,15 @@ trait ComponentAnalyzerLibrary {
 
         $tokens = array_values($tokens);
 
-
+        $posStart = null;
         foreach ($tokens as $pos => $token) {
             if (is_array($token)
                 && in_array($token[0], [T_STRING, T_NS_SEPARATOR], true)) {
                 $name .= $token[1];
+                $posStart = $posStart ?? $pos;
             } else {
                 $name = '';
+                $posStart = null;
                 continue;
             }
 
@@ -317,115 +370,54 @@ trait ComponentAnalyzerLibrary {
                 && $token[0] === T_STRING
                 && isset($tokens[$pos + 1])
                 && $this->checkTockenIn($tokens, $pos, 1, ['('])
-                && !$this->checkTockenIn($tokens, $pos, -1, [T_OBJECT_OPERATOR, T_NEW, T_PAAMAYIM_NEKUDOTAYIM])
+                && !$this->checkTockenIn($tokens, $posStart, -1, [T_OBJECT_OPERATOR, T_NEW, T_PAAMAYIM_NEKUDOTAYIM])
             ) {
                 $called[] = $name;
                 $name = '';
+                $posStart = null;
             }
         }
 
-        $called = static::countAggreg($called);
-
-        return $called;
+        return array_unique($called);
     }
 
     protected function extractUsedConstants(array $tokens)
     {
         $constants = [];
         $usedPos = [];
+        $nameConstant = '';
 
         foreach ($tokens as $pos => $token) {
-            if (is_array($token) && $token[0] === T_PAAMAYIM_NEKUDOTAYIM) {
-                if ($tokens[$pos + 2] === '(') {
-                    continue;
-                } elseif (isset($tokens[$pos + 3]) && $tokens[$pos + 3] === '(') {
-                    continue;
-                } elseif (!is_array($tokens[$pos + 1]) || strpos($tokens[$pos + 1][1], '$') === 0) {
-                    continue;
-                }
-
-                $constantClass = '';
-
-                for ($i = $pos - 1; isset($tokens[$i]); $i--) {
-                    if (is_array($tokens[$i]) && $tokens[$i][0] === T_WHITESPACE && $i === $pos - 1) {
-                        continue;
-                    }
-
-                    if (!is_array($tokens[$i]) || $tokens[$i][0] === T_WHITESPACE) {
-                        break;
-                    }
-
-                    $constantClass = $tokens[$i][1] . $constantClass;
-                    $usedPos[$i] = true;
-                }
-
-                $usedPos[$pos + 1] = true;
-                $constants[] = $constantClass . '::' . $tokens[$pos + 1][1];
+            if (!$nameConstant && (!is_array($token) || !in_array($token[0], [T_STRING, T_NS_SEPARATOR]))) {
+                continue;
             }
+            if (!$nameConstant || in_array($token[0], [T_STRING, T_NS_SEPARATOR])) {
+                $nameConstant .= $token[1];
+                continue;
+            }
+
+            if (
+                $this->checkTockenIn($tokens, $pos, -1,
+                    ['.', ',', ':', '(', '*', '/', '-', '+', '%', '|', '&', '^', '!', '=', '[', '>', '<', '?',
+                        T_BOOLEAN_AND, T_BOOLEAN_OR, T_COALESCE, T_SL, T_SPACESHIP, T_SR,
+                        T_IS_NOT_EQUAL, T_IS_EQUAL, T_IS_GREATER_OR_EQUAL, T_IS_IDENTICAL, T_IS_NOT_EQUAL, T_IS_SMALLER_OR_EQUAL,
+                        //
+                        T_CONCAT_EQUAL, T_DIV_EQUAL, T_AND_EQUAL, T_COALESCE_EQUAL, T_MINUS_EQUAL, T_MOD_EQUAL, T_MUL_EQUAL,
+                        T_OR_EQUAL, T_POW_EQUAL, T_SL_EQUAL, T_SR_EQUAL, T_XOR_EQUAL
+                    ],
+                    [T_WHITESPACE, T_COMMENT, T_NS_SEPARATOR, T_STRING])
+                && $this->checkTockenIn($tokens, $pos, 1,
+                    ['.', ',', ':', ')', '*', '/', '-', '+', '%', '|', '&', '^', '!', ']', '>', '<', '?', ';',
+                        T_BOOLEAN_AND, T_BOOLEAN_OR, T_COALESCE, T_SL, T_SPACESHIP, T_SR,
+                        T_IS_NOT_EQUAL, T_IS_EQUAL, T_IS_GREATER_OR_EQUAL, T_IS_IDENTICAL, T_IS_NOT_EQUAL, T_IS_SMALLER_OR_EQUAL
+                    ])
+            ) {
+                $constants[] = $nameConstant;
+            }
+            $nameConstant = '';
         }
 
-        foreach ($tokens as $pos => $token) {
-            if (!is_array($token) || $token[0] !== T_STRING || isset($usedPos[$pos])) {
-                continue;
-            }
-
-            if (in_array(strtolower($token[1]), ['true', 'false', 'null'], true)) {
-                continue;
-            }
-
-            if (isset($tokens[$pos + 1])) {
-                // : is used by labels
-                if (in_array($tokens[$pos + 1], [':', '('])) {
-                    continue;
-                }
-
-                if (is_array($tokens[$pos + 1]) && in_array($tokens[$pos + 1][0], [T_PAAMAYIM_NEKUDOTAYIM], true)) {
-                    continue;
-                }
-            }
-
-            if (isset($tokens[$pos - 1]) && is_array($tokens[$pos - 1]) && $tokens[$pos - 1][0] === T_OBJECT_OPERATOR) {
-                continue;
-            }
-
-            $previousTokens = array_slice($tokens, max($pos - 3, 0), max($pos - max($pos - 3, 0), 0));
-            $previousTokens = array_filter($previousTokens, function ($token) {
-                return !is_array($token) || $token[0] !== T_WHITESPACE;
-            });
-
-            $lastToken = end($previousTokens);
-            $anteToken = prev($previousTokens);
-
-            if (is_array($lastToken) && in_array($lastToken[0], [T_NEW, T_NS_SEPARATOR, T_INSTANCEOF, T_GOTO], true)) {
-                continue;
-            }
-
-            if ($lastToken === '(' && is_array($anteToken) && in_array($anteToken[0], [T_FUNCTION, T_DECLARE], true)) {
-                continue;
-            }
-
-            if ($lastToken === ':') {
-                continue;
-            }
-
-            if (isset($tokens[$pos + 1]) && is_array($tokens[$pos + 1])) {
-                if (in_array($tokens[$pos + 1][0], [T_VARIABLE, T_NS_SEPARATOR], true)) {
-                    continue;
-                }
-
-                if ($tokens[$pos + 1][0] === T_WHITESPACE
-                    && isset($tokens[$pos + 2]) && is_array($tokens[$pos + 2]) && $tokens[$pos + 2][0] === T_VARIABLE
-                ) {
-                    continue;
-                }
-            }
-
-            $constants[] = $token[1];
-        }
-
-        $constants = static::countAggreg($constants);
-
-        return $constants;
+        return array_unique($constants);
     }
 }
 
@@ -439,13 +431,17 @@ class FileAnalyzer implements ContentAnalyzer
         $this->namespaceAnalyzer = $this->getNamespaceAnalyzer();
     }
 
-    public function analyze(string $path)
+    /**
+     * @param string $path
+     * @return NamespaceComponent[]|null
+     */
+    public function analyze(string $path): ?array
     {
         $contents = file_get_contents($path);
         $tokens = token_get_all($contents);
 
         if (empty($tokens)) {
-            return;
+            return null;
         }
         $tokens = array_map(function($token) {
             if (!is_array($token)) return $token;
@@ -453,9 +449,11 @@ class FileAnalyzer implements ContentAnalyzer
             return $token;
         }, $tokens);
 
+        $components = [];
         foreach ($this->extract($tokens) as $component) {
-            yield $component;
+            $components[] = $component;
         }
+        return $components;
     }
     public function extract(array &$tokens, $deleteExtracted=false): \Generator
     {
@@ -574,13 +572,16 @@ class NamespaceAnalyzer implements ContentAnalyzer
                 $namespace->interfaces[] = $interfaceComponent;
             }
 
+            $namespace->uses = $this->extractUsedNames($namespaceTokens);
+
             foreach ($this->functionAnalyzer->extract($namespaceTokens, true) as $functionComponent) {
                 $namespace->functions[] = $functionComponent;
             }
 
-            $namespace->uses = $this->extractUsedNames($namespaceTokens);
-            $namespace->constants = $this->extractConstants($namespaceTokens);
+            $namespace->constants = $this->extractConstants($namespaceTokens, true);
             $namespace->callFunctions = $this->extractCalledFunctions($namespaceTokens);
+            $namespace->usedConstants = $this->extractUsedConstants($namespaceTokens);
+
 
             return $namespace;
         }, $namespaces);
@@ -594,6 +595,7 @@ class NamespaceAnalyzer implements ContentAnalyzer
         $functions = [];
         $currentClass = '';
         $currentAlias = '';
+        $currentShortName = '';
         $multiplePrefix = '';
 
         $isUse = false;
@@ -621,35 +623,31 @@ class NamespaceAnalyzer implements ContentAnalyzer
                 }
             }
 
-            if ($isUse && in_array($token, [';', '}'])) {
+            if ($isUse && in_array($token, [';', '}', ','])) {
+                if ($isMultiple) {
+                    $currentClass = $multiplePrefix . $currentClass;
+                    if ($token === '}') {
+                        $isMultiple = false;
+                        $multiplePrefix = '';
+                    }
+                }
+
                 if (!$isAlias) {
-                    $classes[$currentClass] = $currentClass;
+                    $classes[$currentShortName] = $currentClass;
                 } else {
                     $classes[$currentAlias] = $currentClass;
                 }
 
-                $isUse = false;
+                if (in_array($token, [';', '}'])) {
+                    $isUse = false;
+                }
                 $isAlias = false;
-                $isMultiple = false;
                 $currentClass = '';
                 $currentAlias = '';
-                $multiplePrefix = '';
             } elseif ($isUse && $token === '{') {
                 $isMultiple = true;
                 $multiplePrefix = $currentClass;
                 $currentClass = '';
-            } elseif ($isUse && $isMultiple && $token === ',') {
-                $currentClass = $multiplePrefix . $currentClass;
-
-                if (!$isAlias) {
-                    $classes[$currentClass] = $currentClass;
-                } else {
-                    $classes[$currentAlias] = $currentClass;
-                }
-
-                $isAlias = false;
-                $currentClass = '';
-                $currentAlias = '';
             }
 
             if (!$isUse || !is_array($token)) {
@@ -661,6 +659,7 @@ class NamespaceAnalyzer implements ContentAnalyzer
                     $currentAlias .= $token[1];
                 } else {
                     $currentClass .= $token[1];
+                    $currentShortName = $token[1];
                 }
             } elseif ($token[0] === T_AS) {
                 $isAlias = true;
@@ -762,7 +761,7 @@ class InterfaceAnalyzer implements ContentAnalyzer
         }
 
         $component->properties = $this->extractProperties($innerTokens);
-        $component->constants = $this->extractConstants($innerTokens);
+        $component->constants = $this->extractConstants($innerTokens, true);
 
         return $component;
     }
@@ -861,7 +860,7 @@ class TraitAnalyzer implements ContentAnalyzer
         }
 
         $component->properties = $this->extractProperties($innerTokens);
-        $component->constants = $this->extractConstants($tokens);
+        $component->constants = $this->extractConstants($tokens, true);
 
         return $component;
     }
@@ -961,7 +960,6 @@ class ClassAnalyzer implements ContentAnalyzer
         $component->name = $this->extractName($tokens);
         $component->interfaces = $this->extractInterfaces($tokens);
         $component->extends = $this->extractExtends($tokens);
-        $component->traits = $this->extractTraits($tokens);
 
         $innerTokens = $tokens;
 
@@ -972,14 +970,15 @@ class ClassAnalyzer implements ContentAnalyzer
             }
         }
 
-        foreach ($this->extractMethods($innerTokens) as $method) {
+
+        $component->properties = $this->extractProperties($innerTokens);
+        foreach ($this->extractMethods($innerTokens, true) as $method) {
             $method->tokenStartPos += $pos + 1;
             $method->tokenEndPos += $pos + 1;
             $component->methods[] = $method;
         }
-
-        $component->properties = $this->extractProperties($innerTokens);
-        $component->constants = $this->extractConstants($tokens);
+        $component->traits = $this->extractTraits($tokens);
+        $component->constants = $this->extractConstants($tokens, true);
 
         return $component;
     }
@@ -1020,11 +1019,11 @@ class ClassAnalyzer implements ContentAnalyzer
         return $interfaces;
     }
 
-    private function extractMethods(array $tokens)
+    private function extractMethods(array &$tokens, $deleteExtracted=false)
     {
         $methods = [];
 
-        foreach ($this->functionAnalyzer->extract($tokens) as $component) {
+        foreach ($this->functionAnalyzer->extract($tokens, $deleteExtracted) as $component) {
             $methods[] = $component;
         }
 
@@ -1235,9 +1234,7 @@ class FunctionAnalyzer implements ContentAnalyzer
             }
         }
 
-        $instantiated = static::countAggreg($instantiated);
-
-        return $instantiated;
+        return array_unique($instantiated);
     }
 
 

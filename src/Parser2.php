@@ -2,8 +2,23 @@
 
 namespace YRV\Autoloader;
 
+use YRV\Autoloader\Parser\Scaner;
+
 require __DIR__ . '/Parser/components.php';
 require __DIR__ . '/Parser/analyzers.php';
+require __DIR__ . '/Parser/Scaner.php';
+
+
+
+$scaner = new Scaner();
+$scaner->run();
+//print_r($scaner->included);
+//$scaner->scanFile('/var/www/vendor/illuminate/support/helpers.php');
+//$scaner->scanFile('/var/www/vendor/nesbot/carbon/src/Carbon/CarbonPeriod.php');
+//$scaner->scanFile(__DIR__.'/../tests/files/functions.php');
+//$scaner->scanFile('/var/www/vendor/leocavalcante/siler/src/facades.php');
+
+return;
 
 $janus = new Parser\FileAnalyzer();
 

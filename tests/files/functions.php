@@ -5,14 +5,19 @@ namespace Namespaces\asdf;
 use function GuzzleHttp\Psr7\str;
 use function Illuminate\Filesystem;
 use function Illuminate\Support\Facades as facade;
+use ASD\facade;
+
+$a = Siler\Swoole\raw + '123';
 
 use PHPUnit\Util\ErrorHandler;
 use PHPUnit\{
     TextUI\XmlConfiguration\CodeCoverage\Report\Php,
     TextUI\XmlConfiguration\Logging\TestDox as TestDox,
-    function helpers
+    TextUI\XmlConfiguration\CodeCoverage\Report\Php2,
+    Helpers\asd as facade2
 };
 define('CONSTANT', 'constanta');
+define ( "CONSTANT2", 'constanta2');
 
 
 const CONSTANT_ONE  = 'qwer';
@@ -21,7 +26,9 @@ const CONST_TREE = 3, CONST_FOUR = 4;
 
 function functionOne($a) {
     $result = strlen($a);
-    $result = \strlen($result) + str($a) + CONST_TREE;
+    $result = \strlen($result) + str($a) + CONST_TREE + CONSTANT_TWO;
+    $a .= CONSTANT2;
+    $b = [CONST_FOUR];
 
     return require($b);
 };
@@ -30,7 +37,13 @@ function functionOne($a) {
 //$a = fn() => 1+2;
 
 class NewClass implements \Iterator {
-    use Traitt;
+    use Filesystem;
+    use IntervalRounding;
+    use Mixin {
+        Mixin::mixin as baseMixin;
+    }
+    use Options;
+
     const
         CONS_CLASS  = 'Const of class' . 'asdf',
         CONST2 = 'asdfadf';
