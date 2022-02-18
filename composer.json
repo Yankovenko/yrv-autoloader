@@ -10,9 +10,7 @@
   },
   "license": "BSD-2-Clause",
   "autoload": {
-    "psr-4": {
-      "YRV\\Autoloader\\": "src/"
-    }
+    "classmap": ["src/"]
   },
   "autoload-dev": {
     "psr-4": {

@@ -192,9 +192,9 @@ trait ComponentAnalyzerLibrary {
                 $constFound = false;
             }
 
-            if ($delete) {
-                unset($tokens[$pos]);
-            }
+//            if ($delete) {
+//                unset($tokens[$pos]);
+//            }
         }
 
         return $constants;
@@ -276,7 +276,7 @@ trait ComponentAnalyzerLibrary {
             if ($isFunction) {
                 if ($nestedLevel === 0 && $token === ';') {
                     $isFunction = false;
-                } elseif ($token === '{') {
+                } elseif ($token === '{' || $token[0] === T_CURLY_OPEN) {
                     $nestedLevel++;
                 } elseif ($token === '}') {
                     $nestedLevel--;
@@ -513,7 +513,7 @@ class NamespaceAnalyzer implements ContentAnalyzer
                 $currentNamespace = '';
                 $isNested = false;
                 $nestedLevel = 0;
-            } elseif (($isNamespace || $isNested) && $token === '{') {
+            } elseif (($isNamespace || $isNested) && ($token === '{' || $token[0] === T_CURLY_OPEN)) {
                 $isNamespace = false;
                 $isNested = true;
                 $nestedLevel++;
@@ -558,7 +558,7 @@ class NamespaceAnalyzer implements ContentAnalyzer
 //        die();
 //        echo 123;
         $namespaces = array_map(function (NamespaceComponent $namespace) use ($tokens) {
-            $namespaceTokens = array_slice($tokens, $namespace->tokenStartPos, $namespace->tokenEndPos - $namespace->tokenStartPos, true);
+            $namespaceTokens = array_slice($tokens, $namespace->tokenStartPos, $namespace->tokenEndPos - $namespace->tokenStartPos+1, true);
 
             foreach ($this->classAnalyzer->extract($namespaceTokens, true) as $classComponent) {
                 $namespace->classes[] = $classComponent;
@@ -576,11 +576,13 @@ class NamespaceAnalyzer implements ContentAnalyzer
 
             foreach ($this->functionAnalyzer->extract($namespaceTokens, true) as $functionComponent) {
                 $namespace->functions[] = $functionComponent;
+                $namespace->usedConstants = array_merge($namespace->usedConstants, $functionComponent->usedConstants);
+                $namespace->callFunctions = array_merge($namespace->callFunctions, $functionComponent->callFunctions);
             }
 
             $namespace->constants = $this->extractConstants($namespaceTokens, true);
-            $namespace->callFunctions = $this->extractCalledFunctions($namespaceTokens);
-            $namespace->usedConstants = $this->extractUsedConstants($namespaceTokens);
+            $namespace->usedConstants = array_merge($namespace->usedConstants, $this->extractUsedConstants($namespaceTokens));
+            $namespace->callFunctions = array_merge($namespace->callFunctions, $this->extractCalledFunctions($namespaceTokens));
 
 
             return $namespace;
@@ -711,7 +713,7 @@ class InterfaceAnalyzer implements ContentAnalyzer
                 unset ($tokens[$pos]);
             }
 
-            if ($token === '{') {
+            if ($token === '{' || $token[0] === T_CURLY_OPEN) {
                 $nestedLevel++;
             } elseif ($token === '}') {
                 $nestedLevel--;
@@ -812,7 +814,7 @@ class TraitAnalyzer implements ContentAnalyzer
                 unset ($tokens[$pos]);
             }
 
-            if ($token === '{') {
+            if ($token === '{' || $token[0] === T_CURLY_OPEN) {
                 $nestedLevel++;
             } elseif ($token === '}') {
                 $nestedLevel--;
@@ -923,7 +925,7 @@ class ClassAnalyzer implements ContentAnalyzer
             }
 
 
-            if ($token === '{') {
+            if ($token === '{' || $token[0] === T_CURLY_OPEN) {
                 $nestedLevel++;
             } elseif ($token === '}') {
                 $nestedLevel--;
@@ -1068,7 +1070,7 @@ class FunctionAnalyzer implements ContentAnalyzer
                         break;
                     }
 
-                    if (in_array($followingToken[0], [T_WHITESPACE], true)) {
+                    if (in_array($followingToken[0], [T_WHITESPACE, T_COMMENT], true)) {
                         continue;
                     }
 
@@ -1124,11 +1126,13 @@ class FunctionAnalyzer implements ContentAnalyzer
                 unset ($tokens[$pos]);
             }
 
-            if ($token === '{') {
+            if ($token === '{' || $token[0] === T_CURLY_OPEN) {
                 $nestedLevel++;
             } elseif ($token === '}') {
                 $nestedLevel--;
-                $finished = true;
+                if (!$nestedLevel) {
+                    $finished = true;
+                }
             } elseif ($token === ';' && !$nestedLevel) {
                 $finished = true;
             }
@@ -1161,7 +1165,7 @@ class FunctionAnalyzer implements ContentAnalyzer
 
     private function createFunction(array $tokens)
     {
-        $innerTokens = $tokens;
+        $innerTokens = [];
         $headerTokens = $tokens;
 
         foreach ($tokens as $pos => $token) {

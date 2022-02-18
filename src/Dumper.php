@@ -23,19 +23,19 @@ class Dumper
 {
     protected string $baseDir;
     protected string $cacheDir;
-    
+
     public function __construct(?string $baseDir = null, ?string $cacheDir = null)
     {
         $this->baseDir = $baseDir ? $baseDir : __DIR__ . '/../../../../';
         $this->cacheDir = $cacheDir ? $cacheDir : './../cache/';
     }
-    
+
     public function dump(?string $dir = null)
     {
         $dir = $dir ?? $this->baseDir;
         $this->scan($dir);
     }
-    
+
     protected function scan(string $dir)
     {
         $directory = new \RecursiveDirectoryIterator($dir);
@@ -47,7 +47,7 @@ class Dumper
                 $data = array_merge_recursive($data, $this->parseComposerJson($info));
             }
         }
-        
+
         if (isset($data['f'])) {
             $this->parseIncludedFiles($data['f']);
         }
@@ -88,10 +88,10 @@ class Dumper
                 }
             }
         }
-        
+
         return $data;
     }
-    
+
     protected function parseIncludedFiles($data)
     {
         foreach ($data as $subData) {
@@ -101,7 +101,7 @@ class Dumper
             }
         }
     }
-    
+
     public function parseFile($file)
     {
         $content = file_get_contents($file);
@@ -366,5 +366,9 @@ class Dumper
     }
 
 
-    
+
+}
+function test2341234() {
+    $a = preg_last_error_msg('123');
+$b = \TEST123;
 }

@@ -4,17 +4,19 @@ namespace YRV\Autoloader;
 
 use YRV\Autoloader\Parser\Scaner;
 
-require __DIR__ . '/Parser/components.php';
-require __DIR__ . '/Parser/analyzers.php';
+//require __DIR__ . '/Parser/components.php';
+//require __DIR__ . '/Parser/analyzers.php';
 require __DIR__ . '/Parser/Scaner.php';
 
 
-
-$scaner = new Scaner();
-$scaner->run();
+$scaner = new Scaner(__DIR__ . '/../');
+//print_r($scaner);
+$scaner->run(false);
 //print_r($scaner->included);
 //$scaner->scanFile('/var/www/vendor/illuminate/support/helpers.php');
-//$scaner->scanFile('/var/www/vendor/nesbot/carbon/src/Carbon/CarbonPeriod.php');
+//$res = $scaner->scanFile('/var/www/vendor/yrv/autoloader/src/Dumper.php', true);
+//print_r ($scaner);
+//print_r ($res);
 //$scaner->scanFile(__DIR__.'/../tests/files/functions.php');
 //$scaner->scanFile('/var/www/vendor/leocavalcante/siler/src/facades.php');
 
