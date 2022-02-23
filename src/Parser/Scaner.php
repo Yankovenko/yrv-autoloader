@@ -2,26 +2,41 @@
 
 namespace YRV\Autoloader\Parser;
 
+use GuzzleHttp\Psr7\Stream;
+
 require __DIR__ . '/components.php';
 require __DIR__ . '/analyzers.php';
 
 class Scaner
 {
     protected array $errors = [];
+    protected $debugStream = null;
+    protected $errorStream = null;
 
-    protected array $composersData;
-    public array $included = [];
-//    protected array $
+    protected array $composersData = [];
+    protected array $includeFiles = [];
+    protected array $resourceFiles = [];
+    protected array $libraryFiles = [];
 
-    protected string $baseDir;
-    protected string $cacheDir;
+    public string $baseDir;
+    public string $cacheDir;
     protected string $cacheDirFiles;
     protected FileAnalyzer $fileAnalyzer;
 
     protected array $systemConstants;
     protected array $systemFunctions;
+    protected array $systemObjects;
 
-    public function __construct(?string $baseDir = null, ?string $cacheDir = null)
+    protected array $stat = [];
+
+    /**
+     * @param string|null $baseDir
+     * @param string|null $cacheDir
+     * @param $errorStream - resource streem | null = stderr | false - no out
+     * @param $debugStream - resource stream | true = stdout | null|false - no out
+     * @throws \Exception
+     */
+    public function __construct(?string $baseDir = null, ?string $cacheDir = null, $errorStream = null, $debugStream = null)
     {
         $this->baseDir = realpath($baseDir ? $baseDir : __DIR__ . '/../../../..');
         $this->cacheDir = realpath($cacheDir ? $cacheDir : __DIR__ .'/../../cache');
@@ -41,7 +56,65 @@ class Scaner
             get_declared_interfaces(),
             get_declared_traits()
         );
+
+        if ($errorStream) {
+            $this->setErrorStream($errorStream);
+        } elseif ($errorStream === null) {
+            $this->setErrorStream(fopen('php://stderr', 'w'));
+        }
+        if (is_resource($debugStream)) {
+            $this->setDebugStream($debugStream);
+        } elseif ($debugStream === true) {
+            $this->setDebugStream(fopen('php://stdout', 'w'));
+        }
     }
+
+    public function setDebugStream($stream)
+    {
+        if (!is_resource($stream)) {
+            throw new \InvalidArgumentException('Stream must be a resource');
+        }
+
+        $this->debugStream = $stream;
+    }
+
+    public function setErrorStream($stream)
+    {
+        if (!is_resource($stream)) {
+            throw new \InvalidArgumentException('Stream must be a resource');
+        }
+
+        $this->errorStream = $stream;
+    }
+
+    protected function addError($error, ...$args)
+    {
+        if (!empty($args)) {
+            $error = sprintf($error, ...$args);
+        }
+        $this->errors[] = $error;
+        if ($this->errorStream) {
+            fputs($this->errorStream, $error);
+        } elseif ($this->debugStream) {
+            fputs($this->debugStream, 'Error: ' . $error);
+        }
+    }
+
+    protected function debug(...$args)
+    {
+        if (!$this->debugStream) {
+            return;
+        }
+        foreach ($args as $arg) {
+            if (is_scalar($arg)) {
+                fputs($this->debugStream, (string) $arg);
+            } else {
+                fputs($this->debugStream, print_r ($arg, true));
+            }
+            fputs($this->debugStream, "\n");
+        }
+    }
+
 
     public function run($recreateCache=null)
     {
@@ -50,36 +123,46 @@ class Scaner
 
         try {
             // сканирует и парсит все композер файлы
-            $this->scanAllComposerFiles($this->baseDir);
+//            $this->scanAllComposerFiles($this->baseDir);
 //            print_r($this->composersData);
 //            die();
 //
 //            //
-            $files = $this->getFilesForIncludes($dev);
+            $this->debug('Included files', $this->includeFiles);
+            $this->debug('Resources files', $this->resourceFiles);
+            $this->debug('Library files', $this->libraryFiles);
+
+//            $files = $this->getFilesForIncludes($dev);
 //print_r ($files);
 //die();
             //
-//            // наполняет this->included['constants'] & ['functions']
-            $this->scanIncludedFiles($files);
-//print_r ($this->included);
+            // наполняет this->included['constants'] & ['functions']
+            $refResources = $this->getResourceReferencesFromFiles($this->resourceFiles);
+
+            $this->debug('Ref resoureces', $refResources);
+
+            $data = $this->scanFiles($this->libraryFiles, $recreateCache);
+
+            $this->debug('Result scaning', $data);
+
+            //print_r ($data);
 //die();
-            //
-            $allFiles = $this->getAllFiles($dev);
-//print_r ($allFiles);
-//die();
-            $data = $this->scanAllFiles($allFiles, $recreateCache);
-//print_r ($data);
-//die();
-            $dependencies = $this->makeDependencies($data);
-//            print_r($dependencies);
-//            die();
+            $dependencies = $this->makeDependencies($data, $refResources);
+
+            $this->debug('Dependencies', $dependencies);
+
             $this->createCacheAutload($dependencies);
+
+            $this->makeIncludeFile($this->includeFiles);
+
+            echo "Process finished:";
+            echo "Create/updated cache files: {$this->stat['c']}\n";
+            echo "Create/updated dependencies files: {$this->stat['d']}\n";
 
 
 
         } catch (\Throwable $exception) {
-            $this->errors[] = 'Error: '.$exception->getMessage();
-            print_r($this->errors);
+            $this->addError($exception->getMessage());
             die();
         }
 
@@ -88,15 +171,22 @@ class Scaner
 
     }
 
-    public function createCacheAutload($dependencies)
+    protected function makeIncludeFile (array $files)
+    {
+        $files = array_map(fn($value) => $this->trimPath($value), $files);
+        file_put_contents($this->cacheDir . '/!required', implode("\n", $files));
+    }
+
+    protected function createCacheAutload($dependencies)
     {
         foreach ($dependencies as $hash => $dependency) {
             file_put_contents($this->cacheDir . '/'. $hash, implode("\n", $dependency));
+            $this->stat['d']++;
         }
     }
 
 
-    public function makeDependencies($data)
+    public function makeDependencies($data, $refResources)
     {
         $functions = [];
         $constants = [];
@@ -109,12 +199,12 @@ class Scaner
         foreach ($data as $hash => $datum) {
             if (!empty($datum['f'])) {
                 array_walk($datum['f'], function($name) use (&$included, $datum) {
-                    $this->included['functions'][$name] = $datum['fp'];
+                    $refResources['functions'][$name] = $datum['fp'];
                 });
             }
             if (!empty($datum['c'])) {
                 array_walk($datum['c'], function($name) use (&$included, $datum) {
-                    $this->included['constants'][$name] = $datum['fp'];
+                    $refResources['constants'][$name] = $datum['fp'];
                 });
             }
 
@@ -147,8 +237,8 @@ class Scaner
             }
             if (isset($object['cf'])) {
                 foreach ($object['cf'] as $functionName) {
-                    if (isset($this->included['functions'][$functionName])) {
-                        $object['rf'][$functionName] = $this->included['functions'][$functionName];
+                    if (isset($refResources['functions'][$functionName])) {
+                        $object['rf'][$functionName] = $refResources['functions'][$functionName];
                     }
                 }
             }
@@ -156,8 +246,8 @@ class Scaner
             // то добавляем зависимость
             if (isset($object['uc'])) {
                 foreach ($object['uc'] as $constantName) {
-                    if (isset($this->included['constants'][$constantName])) {
-                        $object['rc'][$constantName] = $this->included['constants'][$constantName];
+                    if (isset($refResources['constants'][$constantName])) {
+                        $object['rc'][$constantName] = $refResources['constants'][$constantName];
                     }
                 }
             }
@@ -186,8 +276,9 @@ class Scaner
         } while ($onceAgain);
 
         $dependencies = [];
-        foreach ($objects as $name => $object) {
+        foreach ($objects as $name => &$object) {
             $hash = md5($name);
+            $object['h'] = $hash;
             $dependencies[$hash] = [$object['fp']];
             if (isset($object['rc'])) {
                 $dependencies[$hash] = array_merge($dependencies[$hash], $object['rc']);
@@ -201,19 +292,23 @@ class Scaner
             $dependencies[$hash] = array_unique(array_values($dependencies[$hash]));
         }
 
+        $this->debug('Dependencies process', $objects);
+
         return $dependencies;
     }
 
 
     /** filled
      * @param $files
-     * @return void
+     * @return array
      */
-    public function scanIncludedFiles($files)
+    public function getResourceReferencesFromFiles($files): array
     {
+        $refResources = [];
+
         foreach ($files as $file) {
             if (!is_file($file)) {
-                $errors[] = sprintf(
+                $this->addError(
                     'File [%s] for included not found',
                     $file
                 );
@@ -223,7 +318,7 @@ class Scaner
             try {
                 $components = $this->fileAnalyzer->analyze($file);
             } catch (\Throwable $exception) {
-                $errors[] = sprintf(
+                $this->addError(
                     'Error analyze file [%s]: %s',
                     $file,
                     $exception->getMessage()
@@ -234,30 +329,32 @@ class Scaner
             foreach ($components as $component) {
                 $functions = $this->filterFunctions($component->getDeclaredFunctions());
                 foreach ($functions as $name) {
-                    if (isset($this->included['functions'][$name])) {
-                        $this->errors[] = sprintf(
+                    if (isset($refResources['functions'][$name])) {
+                        $this->addError(
                             'Duplicate function [%s] declared in files: %s, %s',
-                            $name, $file, $this->included['functions'][$name]
+                            $name, $file, $refResources['functions'][$name]
                         );
                     }
-                    $this->included['functions'][$name] = $this->trimPath($file);
+                    $refResources['functions'][$name] = $this->trimPath($file);
                 }
                 $constants = $this->filterFunctions($component->getDeclaredConstants());
                 foreach ($constants as $name) {
-                    if (isset($this->included['constants'][$name])) {
-                        $this->errors[] = sprintf(
+                    if (isset($refResources['constants'][$name])) {
+                        $this->addError(
                             'Duplicate constant [%s] declared in files: %s, %s',
-                            $name, $file, $this->included['functions'][$name]
+                            $name, $file, $refResources['functions'][$name]
                         );
                     }
-                    $this->included['constants'][$name] = $this->trimPath($file);
+                    $refResources['constants'][$name] = $this->trimPath($file);
                 }
                 unset($component);
             }
         }
+
+        return $refResources;
     }
 
-    public function scanAllFiles($files, $recreateCache=null): array
+    public function scanFiles($files, $recreateCache=null): array
     {
         $result = [];
         foreach ($files as $file) {
@@ -273,7 +370,7 @@ class Scaner
 
 
     /**
-     * @param $file
+     * @param $shortfile - path from baseDir or fullpath, if second - cache not used
      * @param bool|null $cache - true - update, false - not use, null - update if change
      * @return array[]|null
      * @throws \Exception
@@ -283,11 +380,16 @@ class Scaner
         $file = $this->baseDir . $shortfile;
 
         if (!is_file($file)) {
-            $this->errors[] = sprintf(
-                'File [%s] not found',
-                $file
-            );
-            return null;
+            if (!is_file($shortfile)) {
+                $this->addError(
+                    'File [%s] not found',
+                    $file
+                );
+                return null;
+            } else {
+                $file = $shortfile;
+                $cache = false;
+            }
         }
         $fileHash = md5($file);
         $fileCache = $this->cacheDirFiles . '/' . $fileHash;
@@ -303,7 +405,7 @@ class Scaner
             $components = $this->fileAnalyzer->analyze($file);
 //            print_r($components);
         } catch (\Throwable $exception) {
-            $errors[] = sprintf(
+            $this->addError(
                 'Error analyze file [%s]: %s',
                 $file,
                 $exception->getMessage()
@@ -356,7 +458,10 @@ class Scaner
 
         $result['fp'] = $shortfile;
 
-        if ($cache!==false && !file_put_contents($fileCache, serialize($result))) {
+        if ($cache===false) {
+            return $result;
+        }
+        if (!file_put_contents($fileCache, serialize($result))) {
             throw new \Exception(
                 sprintf('Error save cache file [%s]: %s', $fileCache, $exception->getMessage()),
                 0,
@@ -364,6 +469,7 @@ class Scaner
             );
         }
 
+        $this->stat['c']++;
         return $result;
 
     }
@@ -407,21 +513,25 @@ class Scaner
     }
 
 
-    protected function scanAllComposerFiles(string $dir)
+    public function scanAllComposerFiles(string $dir, $addInclude = false)
     {
         $directory = new \RecursiveDirectoryIterator($dir);
         $iterator = new \RecursiveIteratorIterator($directory);
         $files = array();
         $data = [];
         foreach ($iterator as $info) {
+
+            if ($iterator->getDepth()>2) {
+                continue;
+            }
+
             if ($info->getFilename() == 'composer.json') {
 //                var_dump($info);
                 $composerFilepath = realpath($info->getPath());
 //                die();
-                $data[$composerFilepath] = $this->parseComposerJson($info);
+                $this->scanComposerFile($info, $addInclude);
             }
         }
-        $this->composersData = $data;
 
 
 //        if (isset($data['f'])) {
@@ -431,67 +541,72 @@ class Scaner
 //        die();
     }
 
-    protected function parseComposerJson(\SplFileInfo $file): array
+    public function scanComposerFile($file, $addInclude = false, $useDevelop = false): void
     {
-        $body = \file_get_contents($file->getPathname());
+        $filename = null;
+        if ($file instanceof \SplFileInfo) {
+            $filename = $file->getPathname();
+        } elseif (is_file($file)) {
+            $filename = $file;
+        } elseif (is_file($this->baseDir . $file)) {
+            $filename = $this->baseDir . $file;
+        } else {
+            $filename = (string) $file;
+            $body = false;
+        }
+        if ($filename) {
+            $body = \file_get_contents($filename);
+        }
         if ($body === false) {
-            echo "Error loading file [{$file->getFilename()}]\n";
-            return [];
+            $this->addError("Error loading file [{$filename}]");
+            return;
         }
 
         $json = \json_decode($body, true);
 
         $data = [];
-        $base = realpath($file->getPath());
+        $base = dirname(realpath($filename));
 
-        $map1 = ['a' => 'autoload', 'd' => 'autoload-dev'];
-        $map2 = ['f' => 'files', 'm' => 'classmap', 'p4' => 'psr-4', 'p0' => 'psr-0', 'x' => 'exclude-from-classmap'];
 
-        foreach ($map1 as $k1 => $v1) {
-            foreach ($map2 as $k2 => $v2) {
+        $map1 = $useDevelop ? ['autoload', 'autoload-dev'] : ['autoload'];
+        $map2 = ['classmap', 'psr-4', 'psr-0'];
+//        'exclude-from-classmap'
+
+        $allFiles = [];
+        foreach ($map1 as $v1) {
+            $libraryFiles = [];
+            foreach ($map2 as $v2) {
                 if (isset($json[$v1][$v2]) && !empty($json[$v1][$v2])) {
-                    $data[$k1][$k2] = $json[$v1][$v2];
+                    $libraryFiles = array_merge($libraryFiles, $this->getFilesForDirs($base, $json[$v1][$v2]));
                 }
             }
-        }
-        return $data;
-    }
-
-    public function getAllFiles($dev = false)
-    {
-        $allFiles = [];
-        foreach ($this->composersData as $dir => $data) {
-            $libraryFiles = [];
-            if (isset($data['a']['m'])) {
-                $libraryFiles = array_merge($libraryFiles, $this->getFilesForDirs($dir, $data['a']['m']));
-            }
-
-            if (isset($data['a']['p0'])) {
-                $libraryFiles = array_merge($libraryFiles, $this->getFilesForDirs($dir, $data['a']['p0']));
-            }
-
-            if (isset($data['a']['p4'])) {
-                $libraryFiles = array_merge($libraryFiles, $this->getFilesForDirs($dir, $data['a']['p4']));
-            }
-
-            if (isset($data['a']['x'])) {
-                foreach ($data['a']['x'] as $exclude) {
-                    $exclude = $dir . $exclude;
+            if (isset($json[$v1]['exclude-from-classmap'])) {
+                foreach ($json[$v1]['exclude-from-classmap'] as $exclude) {
+                    $exclude = $base . $exclude;
                     $libraryFiles = array_filter($libraryFiles, function ($name) use ($exclude) {
                         return !(strpos($name, $exclude) === 0);
                     });
                 }
             }
             $allFiles = array_merge($allFiles, $libraryFiles);
-        }
-        return array_unique($allFiles);
 
+            if (isset($json[$v1]['files'])) {
+                $files = array_map(fn($value) => $base . '/' .$value ,$json[$v1]['files']);
+                if ($addInclude) {
+                    $this->includeFiles = array_merge($this->includeFiles, $files);
+                } else {
+                    $this->resourceFiles = array_merge($this->resourceFiles, $files);
+                }
+            }
+        }
+        $this->libraryFiles = array_merge($this->libraryFiles, array_unique($allFiles));
+        $this->composersData[$filename] = $data;
     }
 
     protected function getFilesForDirs(string $dir, array $subitems): array
     {
         if (!is_dir($dir)) {
-            $this->errors[] = sprintf(
+            $this->addError(
                 'Directory [%s] not found',
                 $dir
             );
@@ -510,7 +625,7 @@ class Scaner
                 $files[$name] = true;
                 continue;
             } elseif (!is_dir($name)) {
-                $this->errors[] = sprintf(
+                $this->addError(
                     'Directory [%s] not found',
                     $name
                 );
@@ -560,11 +675,11 @@ class Scaner
     {
         $includes = [];
         foreach ($this->composersData as $dir => $data) {
-            if (isset($data['a']['f'])) {
+            if (isset($data['f'])) {
                 array_map(function ($file) use (&$includes, $dir) {
                     $file = $dir . '/' . $file;
                     $includes[$file] = true;
-                }, $data['a']['f']);
+                }, $data['f']);
             }
 
             if ($dev && isset($data['d']['f'])) {

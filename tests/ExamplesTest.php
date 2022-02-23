@@ -61,8 +61,13 @@ class ExamplesTest extends TestCase
     public function testTest()
     {
         $scaner = new Scaner();
-        $res = $scaner->scanFile(__DIR__.'/../src/Dumper.php', true);
-        print_r ($res);
+        $result = $scaner->scanFile(__DIR__ . '/examples/Macroable.php', false);
+        $this->assertEmpty($result['f']);
+        $this->assertEmpty($result['c']);
+        $this->assertEmpty($result['cf']);
+        $this->assertEmpty($result['uc']);
+        $this->assertEmpty($result['r']);
+        $this->assertEquals(['Illuminate\Support\Traits\Macroable'], $result['o']);
     }
 }
 

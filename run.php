@@ -1,12 +1,9 @@
 <?php
-
 declare(strict_types=1);
 
-if (!function_exists('apcu_enabled') || !apcu_enabled()) {
-    require __DIR__ . '/../../../composer/autoload_classmap.php';
-    return;
-}
+use YRV\Autoloader\Resolver;
 
-require __DIR__ . '/src/Resolver.php';
-YRV\Autoloader\Resolver::init(__DIR__ . '/../../../', 12);
+require_once __DIR__ . '/src/Resolver.php';
+
+Resolver::init(__DIR__ . '/../../..');
 

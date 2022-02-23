@@ -15,23 +15,6 @@ trait ComponentAnalyzerLibrary {
     protected static $functionAnalyzerStatic;
     protected static $paramAnalyzerStatic;
 
-    static function countAggreg(array $values)
-    {
-        return array_reduce($values, function ($acc, $value) {
-            if ($acc === null) {
-                $acc = [];
-            }
-
-            if (!isset($acc[$value])) {
-                $acc[$value] = 1;
-            } else {
-                $acc[$value]++;
-            }
-
-            return $acc;
-        });
-    }
-
     public function getNamespaceAnalyzer(): NamespaceAnalyzer
     {
         if (!static::$namespaceAnalyzerStatic) {
@@ -80,7 +63,7 @@ trait ComponentAnalyzerLibrary {
         return static::$paramAnalyzerStatic;
     }
 
-    protected function checkTockenIn(&$tokens, int $from=0, $shift =1, array $inWhere, array $skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT]) {
+    protected function checkTockenIn(&$tokens, int $from = 0, $shift = 1, array $inWhere, array $skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT]) {
         while(isset($tokens[($from += $shift)])) {
 
             if (in_array(
@@ -103,7 +86,7 @@ trait ComponentAnalyzerLibrary {
         return false;
     }
 
-    protected function extractExtends(array $tokens)
+    protected function extractExtends(array $tokens): string
     {
         $extended = '';
         $extendsFound = false;
@@ -192,9 +175,6 @@ trait ComponentAnalyzerLibrary {
                 $constFound = false;
             }
 
-//            if ($delete) {
-//                unset($tokens[$pos]);
-//            }
         }
 
         return $constants;
@@ -455,6 +435,7 @@ class FileAnalyzer implements ContentAnalyzer
         }
         return $components;
     }
+
     public function extract(array &$tokens, $deleteExtracted=false): \Generator
     {
         yield from $this->namespaceAnalyzer->extract($tokens, $deleteExtracted);
@@ -554,9 +535,7 @@ class NamespaceAnalyzer implements ContentAnalyzer
 
             $namespaces[] = $namespaceComponent;
         }
-//print_r ($namespaces);
-//        die();
-//        echo 123;
+
         $namespaces = array_map(function (NamespaceComponent $namespace) use ($tokens) {
             $namespaceTokens = array_slice($tokens, $namespace->tokenStartPos, $namespace->tokenEndPos - $namespace->tokenStartPos+1, true);
 
@@ -604,7 +583,6 @@ class NamespaceAnalyzer implements ContentAnalyzer
         $isMultiple = false;
         $isAlias = false;
 
-        // Used to prevent anonym function "use" token to be detected as namespace use
         $isFunction = false;
 
         foreach ($tokens as $pos => $token) {
@@ -674,8 +652,9 @@ class NamespaceAnalyzer implements ContentAnalyzer
 
 class InterfaceAnalyzer implements ContentAnalyzer
 {
-    private $functionAnalyzer;
     use ComponentAnalyzerLibrary;
+
+    private $functionAnalyzer;
 
     public function __construct()
     {
@@ -783,8 +762,9 @@ class InterfaceAnalyzer implements ContentAnalyzer
 
 class TraitAnalyzer implements ContentAnalyzer
 {
-    private $functionAnalyzer;
     use ComponentAnalyzerLibrary;
+
+    private $functionAnalyzer;
 
     public function __construct()
     {
@@ -877,13 +857,13 @@ class TraitAnalyzer implements ContentAnalyzer
 
         return $methods;
     }
-
 }
 
 class ClassAnalyzer implements ContentAnalyzer
 {
-    private $functionAnalyzer;
     use ComponentAnalyzerLibrary;
+
+    private $functionAnalyzer;
 
     public function __construct()
     {
@@ -903,6 +883,9 @@ class ClassAnalyzer implements ContentAnalyzer
 
         foreach ($tokens as $pos => $token) {
             if (!isset($currentClassTokens[0]) && is_array($token) && in_array($token[0], [T_ABSTRACT, T_FINAL, T_CLASS], true)) {
+                if ($token[0] === T_CLASS && $this->checkTockenIn($tokens, $pos, -1, [T_DOUBLE_COLON, T_PAAMAYIM_NEKUDOTAYIM])) {
+                    continue;
+                }
                 $followingTokens = array_slice($tokens, $pos + 1, 4);
                 $tokenTypes = array_column($followingTokens, 0);
 
@@ -955,7 +938,7 @@ class ClassAnalyzer implements ContentAnalyzer
         }
     }
 
-    private function createClass(array $tokens)
+    private function createClass(array $tokens): ClassComponent
     {
         $component = new ClassComponent();
 
@@ -985,7 +968,7 @@ class ClassAnalyzer implements ContentAnalyzer
         return $component;
     }
 
-    private function extractInterfaces(array $tokens)
+    private function extractInterfaces(array $tokens): array
     {
         $interfaces = [];
         $currInterface = '';
@@ -1036,8 +1019,9 @@ class ClassAnalyzer implements ContentAnalyzer
 
 class FunctionAnalyzer implements ContentAnalyzer
 {
-    private $paramAnalyzer;
     use ComponentAnalyzerLibrary;
+
+    private $paramAnalyzer;
 
     public function __construct()
     {
@@ -1163,7 +1147,7 @@ class FunctionAnalyzer implements ContentAnalyzer
         }
     }
 
-    private function createFunction(array $tokens)
+    private function createFunction(array $tokens): FunctionComponent
     {
         $innerTokens = [];
         $headerTokens = $tokens;
@@ -1193,7 +1177,7 @@ class FunctionAnalyzer implements ContentAnalyzer
         return $functionComponent;
     }
 
-    private function extractParams(array $tokens)
+    private function extractParams(array $tokens): array
     {
         $params = [];
 
@@ -1204,7 +1188,7 @@ class FunctionAnalyzer implements ContentAnalyzer
         return $params;
     }
 
-    private function extractInstantiatedClasses(array $tokens)
+    private function extractInstantiatedClasses(array $tokens): array
     {
         $instantiated = [];
 
@@ -1319,7 +1303,7 @@ class ParamAnalyzer implements ContentAnalyzer
         }
     }
 
-    private function createParam(array $tokens)
+    private function createParam(array $tokens): ParamComponent
     {
         $paramComponent = new ParamComponent();
 
@@ -1336,7 +1320,6 @@ class ParamAnalyzer implements ContentAnalyzer
                 if (!is_array($token) || $token[0] !== T_WHITESPACE) {
                     $assignmentTokens[] = $token;
                 }
-
                 continue;
             }
 
