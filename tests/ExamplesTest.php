@@ -28,7 +28,12 @@ class ExamplesTest extends TestCase
         $this->assertEmpty($result['f']);
         $this->assertEmpty($result['uc']);
         $this->assertEqualsCanonicalizing(
-            ['base_path', 'storage_path'],
+            [
+                'base_path',
+                'storage_path',
+                'Illuminate\Console\Scheduling\base_path',
+                'Illuminate\Console\Scheduling\storage_path'
+            ],
             $result['cf']);
         $this->assertEquals(['Illuminate\Console\Scheduling\Event'], $result['o']);
         $this->assertEqualsCanonicalizing(
@@ -58,7 +63,7 @@ class ExamplesTest extends TestCase
             $result['r']);
     }
 
-    public function testTest()
+    public function testMacroableFile()
     {
         $scaner = new Scaner();
         $result = $scaner->scanFile(__DIR__ . '/examples/Macroable.php', false);
@@ -68,6 +73,40 @@ class ExamplesTest extends TestCase
         $this->assertEmpty($result['uc']);
         $this->assertEmpty($result['r']);
         $this->assertEquals(['Illuminate\Support\Traits\Macroable'], $result['o']);
+    }
+
+    public function testGlFile()
+    {
+        $scaner = new Scaner();
+        $result = $scaner->scanFile(__DIR__ . '/examples/gl.php', false);
+
+        $this->assertEmpty($result['f']);
+        $this->assertEmpty($result['c']);
+        $this->assertEmpty($result['o']);
+        $this->assertEmpty($result['uc']);
+        $this->assertEmpty($result['r']);
+        $this->assertEquals(['str_starts_with'], $result['cf']);
+    }
+
+
+    public function testArrFile()
+    {
+        $scaner = new Scaner();
+        $result = $scaner->scanFile(__DIR__ . '/examples/Arr.php', false);
+        $this->assertEmpty($result['f']);
+        $this->assertEmpty($result['c']);
+        $this->assertEquals(['Illuminate\Support\Arr'], $result['o']);
+        $this->assertEmpty($result['uc']);
+        $this->assertEqualsCanonicalizing([
+            'Illuminate\Support\value',
+            'value',
+            'Illuminate\Support\data_get',
+            'data_get'
+        ], $result['cf']);
+        $this->assertEqualsCanonicalizing([
+            'Illuminate\Support\Traits\Macroable'
+        ], $result['r']);
+
     }
 }
 

@@ -94,9 +94,9 @@ class Scaner
         }
         $this->errors[] = $error;
         if ($this->errorStream) {
-            fputs($this->errorStream, $error);
+            fputs($this->errorStream, $error  . "\n");
         } elseif ($this->debugStream) {
-            fputs($this->debugStream, 'Error: ' . $error);
+            fputs($this->debugStream, 'Error: ' . $error  . "\n");
         }
     }
 
@@ -197,17 +197,17 @@ class Scaner
         $dependencies = [];
 
         foreach ($data as $hash => $datum) {
-            if (!empty($datum['f'])) {
-                array_walk($datum['f'], function($name) use (&$included, $datum) {
-                    $refResources['functions'][$name] = $datum['fp'];
-                });
-            }
+
             if (!empty($datum['c'])) {
                 array_walk($datum['c'], function($name) use (&$included, $datum) {
                     $refResources['constants'][$name] = $datum['fp'];
                 });
             }
-
+            if (!empty($datum['f'])) {
+                array_walk($datum['f'], function($name) use (&$included, $datum) {
+                    $refResources['functions'][$name] = $datum['fp'];
+                });
+            }
             if (!empty($datum['o'])) {
                 array_walk($datum['o'], function($name) use (&$objects, $hash, $datum) {
                     $objects[$name] = ['h' => $hash, 'fp' => $datum['fp']];
@@ -219,7 +219,9 @@ class Scaner
                     }
                 });
             }
-//            if (!empty($datum['uc'])) {
+
+
+            //            if (!empty($datum['uc'])) {
 //                array_walk($datum['uc'], function($name) use (&$usedConstants, $hash) {$usedConstants[$name] = $hash;});
 //            }
 //            if (!empty($datum['cf'])) {
@@ -229,26 +231,28 @@ class Scaner
 //        print_r ($included);
         foreach ($objects as $name => &$object) {
             $hash = $object['h'];
-            $relations = $data[$hash]['r'];
-            foreach ($relations as $relation) {
-                if (isset($objects[$relation])) {
-                    $object['r'][$relation] =  $objects[$relation]['fp'];
-                }
-            }
-            if (isset($object['cf'])) {
-                foreach ($object['cf'] as $functionName) {
-                    if (isset($refResources['functions'][$functionName])) {
-                        $object['rf'][$functionName] = $refResources['functions'][$functionName];
-                    }
-                }
-            }
             // если испоьзуются константы которые где-то объявлены,
             // то добавляем зависимость
             if (isset($object['uc'])) {
                 foreach ($object['uc'] as $constantName) {
                     if (isset($refResources['constants'][$constantName])) {
                         $object['rc'][$constantName] = $refResources['constants'][$constantName];
+                        $object['r']['_c:' . $refResources['constants'][$constantName]] = $refResources['constants'][$constantName];
                     }
+                }
+            }
+            if (isset($object['cf'])) {
+                foreach ($object['cf'] as $functionName) {
+                    if (isset($refResources['functions'][$functionName])) {
+                        $object['rf'][$functionName] = $refResources['functions'][$functionName];
+                        $object['r']['_f:' . $refResources['functions'][$functionName]] = $refResources['functions'][$functionName];
+                    }
+                }
+            }
+            $relations = $data[$hash]['r'];
+            foreach ($relations as $relation) {
+                if (isset($objects[$relation])) {
+                    $object['r'][$relation] =  $objects[$relation]['fp'];
                 }
             }
         }
@@ -280,16 +284,16 @@ class Scaner
             $hash = md5($name);
             $object['h'] = $hash;
             $dependencies[$hash] = [$object['fp']];
-            if (isset($object['rc'])) {
-                $dependencies[$hash] = array_merge($dependencies[$hash], $object['rc']);
-            }
-            if (isset($object['rf'])) {
-                $dependencies[$hash] = array_merge($dependencies[$hash], $object['rf']);
-            }
+//            if (isset($object['rc'])) {
+//                $dependencies[$hash] = array_merge($dependencies[$hash], $object['rc']);
+//            }
+//            if (isset($object['rf'])) {
+//                $dependencies[$hash] = array_merge($dependencies[$hash], $object['rf']);
+//            }
             if (isset($object['r'])) {
                 $dependencies[$hash] = array_merge($dependencies[$hash], $object['r']);
             }
-            $dependencies[$hash] = array_unique(array_values($dependencies[$hash]));
+            $dependencies[$hash] = array_unique(array_reverse(array_values($dependencies[$hash])));
         }
 
         $this->debug('Dependencies process', $objects);
@@ -438,7 +442,7 @@ class Scaner
 
             $result['cf'] = array_merge(
                 $result['cf'],
-                $this->filterFunctions($component->getCalledFunctions(true))
+                $this->filterFunctions($component->getCalledFunctions(true), $component->getNamespace())
             );
 
             $result['r'] = array_merge(
@@ -486,17 +490,28 @@ class Scaner
         }, ARRAY_FILTER_USE_BOTH);
     }
 
-    protected function filterFunctions(array $functions)
+    protected function filterFunctions(array $functions, $namespace = '')
     {
-        return array_filter($functions, function ($name) {
+        foreach ($functions as $key => $name) {
+
+            $fullname = $name;
             if (substr($name, 0, 1) == '\\') {
-                $name = substr($name, 1);
+                $fullname = $name = substr($name, 1);
+            } elseif ($namespace) {
+                $fullname = $namespace . '\\' . $name;
             }
             if (in_array($name, $this->systemFunctions)) {
-                return false;
+                unset ($functions[$key]);
+                continue;
             }
-            return true;
-        }, ARRAY_FILTER_USE_BOTH);
+            $functions[$key] = $name;
+
+            if ($namespace && strpos($name, '\\') === false) {
+                $functions[] = $fullname;
+            }
+        }
+
+        return $functions;
     }
 
     protected function filterObjects(array $objects)

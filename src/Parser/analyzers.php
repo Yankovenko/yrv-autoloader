@@ -1067,6 +1067,9 @@ class FunctionAnalyzer implements ContentAnalyzer
                 if ($token[0] === T_FUNCTION && $this->checkTockenIn($tokens, $pos, -1, [T_USE])) {
                     continue;
                 }
+                if ($token[0] === T_FUNCTION && $this->checkTockenIn($tokens, $pos, 1, ['('])) {
+                    continue;
+                }
 
                 $isMethod = $token[0] === T_FUNCTION || in_array(T_FUNCTION, $followingTypes, true);
 

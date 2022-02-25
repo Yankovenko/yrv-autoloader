@@ -58,6 +58,11 @@ class NamespaceComponent extends PhpComponent
 
     /** @var array  */
     public $callFunctions = [];
+    
+    public function getNamespace(): string
+    {
+        return $this->name;
+    }
 
     public function getDeclaredFunctions(): array
     {

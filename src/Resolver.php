@@ -19,7 +19,7 @@ class Resolver
             return;
         }
 
-        $uniqueKey = $uniqueKey ? substr(md5($uniqueKey),0,4) : null;
+        $uniqueKey = static::hashUniqueKey($uniqueKey);
         self::loadApcuPrefix($uniqueKey);
         if (!self::$apcuPrefix) {
             self::generateApcuPrefix($uniqueKey);
@@ -32,6 +32,28 @@ class Resolver
     static public function checkApcuEnabled(): bool
     {
         return (function_exists('apcu_enabled') && apcu_enabled());
+    }
+
+    static protected function hashUniqueKey($uniqueKey): string
+    {
+
+    }
+
+    static public function flush(string $uniqueKey = ''): bool
+    {
+        if (!static::checkApcuEnabled()) {
+            return false;
+        }
+        $uniqueKey = static::hashUniqueKey($uniqueKey);
+        self::loadApcuPrefix($uniqueKey);
+        if (self::$apcuPrefix) {
+            foreach (new APCUIterator('/^' . self::$apcuPrefix . '/') as $item) {
+                apcu_delete($item['key']);
+            }
+        }
+        self::generateApcuPrefix($uniqueKey);
+
+        return true;
     }
 
     static protected function preloading()
@@ -104,6 +126,9 @@ class Resolver
 
     static protected function includeFiles($files)
     {
+        if (!trim($files)) {
+            return;
+        }
         $files = explode("\n", $files);
         foreach ($files as $file) {
             includeFile(self::$baseDir . $file);
