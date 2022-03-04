@@ -58,7 +58,7 @@ class NamespaceComponent extends PhpComponent
 
     /** @var array  */
     public $callFunctions = [];
-    
+
     public function getNamespace(): string
     {
         return $this->name;
@@ -66,27 +66,34 @@ class NamespaceComponent extends PhpComponent
 
     public function getDeclaredFunctions(): array
     {
-        $functions = [];
-        $prefix = $this->name ? $this->name . '\\' : '';
-
-        foreach ($this->functions as $function) {
-            if ($function->name) {
-                $functions[] = $prefix . $function->name;
-            }
-        }
-        return $functions;
+        return array_map( fn($object) => $object->name, $this->functions);
+//
+//        //        return $this->functions;
+//        $functions = [];
+////        $prefix = $this->name ? $this->name . '\\' : '';
+//
+//        foreach ($this->functions as $function) {
+////            if ($function->name) {
+//                $functions[] = $prefix . $function->name;
+////            }
+//        }
+//        return $functions;
     }
 
     public function getDeclaredConstants(): array
     {
-        $prefix = $this->name ? $this->name . '\\' : '';
-        if (!$prefix) {
-            return $this->constants;
-        }
-
-        return array_map(function($name) use ($prefix) {
-            return $prefix.$name;
-        }, $this->constants);
+        return $this->constants;
+//        $prefix = $this->name ? $this->name . '\\' : '';
+//        if (!$prefix) {
+//            return $this->constants;
+//        }
+//
+//        return array_map(function($name) use ($prefix) {
+//            if (strpos($name, '\\') === 0) {
+//                return substr($name, 1);
+//            }
+//            return $prefix.$name;
+//        }, $this->constants);
     }
 
     public function getUsedConstants($includeObjects = false): array
@@ -122,9 +129,7 @@ class NamespaceComponent extends PhpComponent
                 $functions = array_merge($functions, $component->getCalledFunctions());
             }
         }
-        $functions = array_unique($functions);
-
-        return $this->nameNormalize($functions, true);
+        return array_unique($functions);
     }
 
     public function getDeclaredObjects(): array
@@ -160,26 +165,10 @@ class NamespaceComponent extends PhpComponent
             $relations = array_merge($relations, $component->traits ?? []);
         }
 
-        $relations = array_unique($relations);
-        return $this->nameNormalize($relations);
+        return array_unique($relations);
 
     }
 
-    protected function nameNormalize(array $names, bool $forFunction = false): array
-    {
-        $results = [];
-        $prefix = $this->name ? $this->name . '\\' : '';
-        foreach ($names as $name) {
-            if (isset($this->uses[$name])) {
-                $results[] = $this->uses[$name];
-            } elseif ($forFunction || strpos($name, '\\') === 0) {
-                $results[] = $name;
-            } else {
-                $results[] = $prefix . $name;
-            }
-        }
-        return $results;
-    }
 }
 
 class InterfaceComponent extends PhpComponent

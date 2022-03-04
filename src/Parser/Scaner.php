@@ -49,7 +49,7 @@ class Scaner
 
         $this->fileAnalyzer = new FileAnalyzer();
         $this->systemFunctions = get_defined_functions()['internal'];
-        $this->systemConstants = get_defined_constants();
+        $this->systemConstants = array_keys(get_defined_constants());
         $this->systemConstantsUnregistred = ['true','false','null'];
         $this->systemObjects = array_merge(
             get_declared_classes(),
@@ -429,30 +429,30 @@ class Scaner
         foreach ($components as $component) {
             $result['f'] = array_merge(
                 $result['f'],
-                $this->filterFunctions($component->getDeclaredFunctions())
+                $this->filterFunctions($component->getDeclaredFunctions(), $component->getNamespace())
             );
             $result['c'] = array_merge(
                 $result['c'],
-                $this->filterConstants($component->getDeclaredConstants())
+                $this->filterConstants($component->getDeclaredConstants(), $component->getNamespace())
             );
             $result['o'] = array_merge(
                 $result['o'],
-                $this->filterConstants($component->getDeclaredObjects())
+                $component->getDeclaredObjects()
             );
 
             $result['cf'] = array_merge(
                 $result['cf'],
-                $this->filterFunctions($component->getCalledFunctions(true), $component->getNamespace())
+                $this->filterFunctions($component->getCalledFunctions(true), $component->getNamespace(), $component->uses, true)
             );
 
             $result['r'] = array_merge(
                 $result['r'],
-                $this->filterObjects($component->getRelationsObjects())
+                $this->filterObjects($component->getRelationsObjects(), $component->getNamespace(), $component->uses)
             );
 
             $result['uc'] = array_merge(
                 $result['uc'],
-                $this->filterConstants($component->getUsedConstants(true))
+                $this->filterConstants($component->getUsedConstants(true), $component->getNamespace(), $component->uses, true)
             );
             unset($component);
         }
@@ -478,53 +478,124 @@ class Scaner
 
     }
 
-    protected function filterConstants(array $constants)
+    protected function filterConstants(array $constants, $namespace = '',  $aliases = [], $canShortNameUse = false)
     {
-        return array_filter($constants, function ($name) {
-            if (isset($this->systemConstants[$name])) {
-                return false;
-            } elseif (isset($this->systemConstantsUnregistred[strtolower($name)])) {
-                return false;
-            }
-            return true;
-        }, ARRAY_FILTER_USE_BOTH);
+        return $this->normalizeNames($constants, $namespace, $aliases, $this->systemConstants, $this->systemConstantsUnregistred, $canShortNameUse);
+
+//        return array_filter($constants, function ($name) {
+//            if (isset($this->systemConstants[$name])) {
+//                return false;
+//            } elseif (isset($this->systemConstantsUnregistred[strtolower($name)])) {
+//                return false;
+//            }
+//            return true;
+//        }, ARRAY_FILTER_USE_BOTH);
     }
 
-    protected function filterFunctions(array $functions, $namespace = '')
+    protected function normalizeNames($names, $namespace = '', $aliases = [], $excludeNames = [], $excludeUnregisterNames = [], $canShortNameUse = false): array
     {
-        foreach ($functions as $key => $name) {
+        $prefix = $namespace ? $namespace . '\\' : '';
 
-            $fullname = $name;
-            if (substr($name, 0, 1) == '\\') {
-                $fullname = $name = substr($name, 1);
-            } elseif ($namespace) {
-                $fullname = $namespace . '\\' . $name;
+        $results = [];
+        foreach ($names as $key => $name) {
+            $isGlobal = false;
+            if (isset($aliases[$name])) {
+                $name = $aliases[$name];
+                $isGlobal = true;
             }
-            if (in_array($name, $this->systemFunctions)) {
-                unset ($functions[$key]);
+            if (substr($name, 0, 1) == '\\') {
+                $name = substr($name, 1);
+                $isGlobal = true;
+            }
+
+            if (in_array($name, $excludeNames) || in_array($prefix . $name, $excludeNames)) {
                 continue;
             }
-            $functions[$key] = $name;
 
-            if ($namespace && strpos($name, '\\') === false) {
-                $functions[] = $fullname;
+            if (
+                in_array(strtolower($name), $excludeUnregisterNames)
+                || in_array($prefix . strtolower($name), $excludeUnregisterNames)
+            ) {
+                continue;
+            }
+
+            if ($isGlobal) {
+                $results[] = $name;
+            } else {
+                $results[] = $prefix . $name;
+                if (
+                    $canShortNameUse
+                    && strpos($name, '\\') === false
+                ) {
+                    $results[] = $name;
+                }
             }
         }
 
-        return $functions;
+//        $results = [];
+//        $prefix = $this->name ? $this->name . '\\' : '';
+//        foreach ($names as $name) {
+//            if (isset($this->uses[$name])) {
+//                $results[] = $this->uses[$name];
+//            } elseif ($forFunction || strpos($name, '\\') === 0) {
+//                $results[] = $name;
+//            } else {
+//                $results[] = $prefix . $name;
+//            }
+//        }
+        return array_unique($results);
     }
 
-    protected function filterObjects(array $objects)
+    protected function filterFunctions(array $functions, $namespace = '', $aliases = [], $canShortNameUse = false)
     {
-        return array_filter($objects, function ($name) {
-            if (substr($name, 0, 1) == '\\') {
-                $name = substr($name, 1);
-            }
-            if (in_array($name, $this->systemObjects)) {
-                return false;
-            }
-            return true;
-        }, ARRAY_FILTER_USE_BOTH);
+
+        return $this->normalizeNames($functions, $namespace, $aliases, $this->systemFunctions, [], $canShortNameUse);
+
+//        return array_filter($functions, function ($name) {
+//            if (substr($name, 0, 1) == '\\') {
+//                $name = substr($name, 1);
+//            }
+//            if (in_array($name, $this->systemFunctions)) {
+//                return false;
+//            }
+//            return true;
+//        }, ARRAY_FILTER_USE_BOTH);
+
+//        foreach ($functions as $key => $name) {
+//
+//            $fullname = $name;
+//            if (substr($name, 0, 1) == '\\') {
+//                $fullname = $name = substr($name, 1);
+//            } elseif ($namespace) {
+//                $fullname = $namespace . '\\' . $name;
+//            }
+//            if (in_array($name, $this->systemFunctions)) {
+//                unset ($functions[$key]);
+//                continue;
+//            }
+//            $functions[] = $name;
+//
+//            if ($namespace && strpos($name, '\\') === false) {
+//                $functions[] = $fullname;
+//            }
+//        }
+//
+//        return $functions;
+    }
+
+    protected function filterObjects(array $objects, $namespace = '', $aliases = [])
+    {
+        return $this->normalizeNames($objects, $namespace, $aliases, $this->systemObjects, []);
+
+//        return array_filter($objects, function ($name) {
+//            if (substr($name, 0, 1) == '\\') {
+//                $name = substr($name, 1);
+//            }
+//            if (in_array($name, $this->systemObjects)) {
+//                return false;
+//            }
+//            return true;
+//        }, ARRAY_FILTER_USE_BOTH);
     }
 
 

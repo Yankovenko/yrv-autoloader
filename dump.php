@@ -14,6 +14,6 @@ $scaner = new Scaner($baseDir);
 $scaner->setDebugStream(fopen($scaner->cacheDir.'/!debug.txt', 'w'));
 
 $scaner->scanComposerFile($baseDir . '/composer.json', true, true);
-$scaner->scanAllComposerFiles($baseDir . '/vendor', true);
+$scaner->scanAllComposerFiles($baseDir . '/vendor', false);
 
-$scaner->run(false);
+$scaner->run();

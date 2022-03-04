@@ -50,6 +50,7 @@ class ExamplesTest extends TestCase
     {
         $scaner = new Scaner();
         $result = $scaner->scanFile(__DIR__ . '/examples/ExampleClass.php', false);
+
         $this->assertEmpty($result['c']);
         $this->assertEmpty($result['cf']);
         $this->assertEquals(['Namespace1\Namespace2\functionOutsideClass'], $result['f']);
@@ -106,6 +107,31 @@ class ExamplesTest extends TestCase
         $this->assertEqualsCanonicalizing([
             'Illuminate\Support\Traits\Macroable'
         ], $result['r']);
+
+    }
+
+    public function testConstantsFile()
+    {
+        $scaner = new Scaner();
+        $result = $scaner->scanFile(__DIR__ . '/examples/constants.php', false);
+        $this->assertEmpty($result['f']);
+        $this->assertEmpty($result['o']);
+        $this->assertEmpty($result['cf']);
+        $this->assertEmpty($result['r']);
+        $this->assertEqualsCanonicalizing([
+            'TestNS\TestNS2\SIMPLE_CONST',
+            'DEFINE_CONST',
+            'TestNS\TestNS3\DEFINE_CONST2'
+        ], $result['c']);
+        $this->assertEqualsCanonicalizing([
+            'SIMPLE_CONST',
+            'DEFINE_CONST',
+            'GLOBAL_CONST',
+            'TestNS\TestNS2\TestNS3\DEFINE_CONST2',
+            'TestNS\TestNS2\SIMPLE_CONST',
+            'TestNS\TestNS2\DEFINE_CONST',
+            'GlobalNS\TestConstViaAlias'
+        ], $result['uc']);
 
     }
 }

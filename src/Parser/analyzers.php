@@ -121,7 +121,7 @@ trait ComponentAnalyzerLibrary {
         $constants = [];
 
         foreach ($tokens as $pos => $token) {
-            if (is_array($token) && $token[0] === T_CONST) {
+            if (is_array($token) && $token[0] === T_CONST && !$this->checkTockenIn($tokens, $pos, -1, [T_USE])) {
                 $constFound = true;
                 if ($delete) {
                     unset($tokens[$pos]);
@@ -166,7 +166,7 @@ trait ComponentAnalyzerLibrary {
 
             if (!$name && in_array($token[0], [T_CONSTANT_ENCAPSED_STRING], true)) {
                 $name = $token[1];
-                $name = trim($name, '\'"');
+                $name = '\\' . trim($name, '\'"');
                 $constants[] = $name;
             }
 
@@ -368,33 +368,41 @@ trait ComponentAnalyzerLibrary {
         $nameConstant = '';
 
         foreach ($tokens as $pos => $token) {
-            if (!$nameConstant && (!is_array($token) || !in_array($token[0], [T_STRING, T_NS_SEPARATOR]))) {
-                continue;
-            }
-            if (!$nameConstant || in_array($token[0], [T_STRING, T_NS_SEPARATOR])) {
-                $nameConstant .= $token[1];
-                continue;
-            }
 
-            if (
-                $this->checkTockenIn($tokens, $pos, -1,
-                    ['.', ',', ':', '(', '*', '/', '-', '+', '%', '|', '&', '^', '!', '=', '[', '>', '<', '?',
-                        T_BOOLEAN_AND, T_BOOLEAN_OR, T_COALESCE, T_SL, T_SPACESHIP, T_SR,
-                        T_IS_NOT_EQUAL, T_IS_EQUAL, T_IS_GREATER_OR_EQUAL, T_IS_IDENTICAL, T_IS_NOT_EQUAL, T_IS_SMALLER_OR_EQUAL,
-                        //
-                        T_CONCAT_EQUAL, T_DIV_EQUAL, T_AND_EQUAL, T_COALESCE_EQUAL, T_MINUS_EQUAL, T_MOD_EQUAL, T_MUL_EQUAL,
-                        T_OR_EQUAL, T_POW_EQUAL, T_SL_EQUAL, T_SR_EQUAL, T_XOR_EQUAL
-                    ],
-                    [T_WHITESPACE, T_COMMENT, T_NS_SEPARATOR, T_STRING])
-                && $this->checkTockenIn($tokens, $pos, 1,
-                    ['.', ',', ':', ')', '*', '/', '-', '+', '%', '|', '&', '^', '!', ']', '>', '<', '?', ';',
-                        T_BOOLEAN_AND, T_BOOLEAN_OR, T_COALESCE, T_SL, T_SPACESHIP, T_SR,
-                        T_IS_NOT_EQUAL, T_IS_EQUAL, T_IS_GREATER_OR_EQUAL, T_IS_IDENTICAL, T_IS_NOT_EQUAL, T_IS_SMALLER_OR_EQUAL
-                    ])
-            ) {
-                $constants[] = $nameConstant;
+            if (is_array($token) && in_array($token[0], [T_STRING, T_NS_SEPARATOR])) {
+                $nameConstant .= $token[1];
+            } elseif (!$nameConstant) {
+                continue;
             }
-            $nameConstant = '';
+//
+//                if (!$nameConstant && (!is_array($token) || !in_array($token[0], [T_STRING, T_NS_SEPARATOR]))) {
+//                continue;
+//            } elseif ($nameConstant) {
+//                $nameConstant .= $token[0];
+//            } else {
+//                continue;
+//            }
+
+            if (!in_array($token[0], [T_STRING, T_NS_SEPARATOR])) {
+                if ($this->checkTockenIn($tokens, $pos, -1,
+                        ['.', ',', ':', '(', '*', '/', '-', '+', '%', '|', '&', '^', '!', '=', '[', '>', '<', '?',
+                            T_BOOLEAN_AND, T_BOOLEAN_OR, T_COALESCE, T_SL, T_SPACESHIP, T_SR,
+                            T_IS_NOT_EQUAL, T_IS_EQUAL, T_IS_GREATER_OR_EQUAL, T_IS_IDENTICAL, T_IS_NOT_EQUAL, T_IS_SMALLER_OR_EQUAL,
+                            //
+                            T_CONCAT_EQUAL, T_DIV_EQUAL, T_AND_EQUAL, T_COALESCE_EQUAL, T_MINUS_EQUAL, T_MOD_EQUAL, T_MUL_EQUAL,
+                            T_OR_EQUAL, T_POW_EQUAL, T_SL_EQUAL, T_SR_EQUAL, T_XOR_EQUAL
+                        ],
+                        [T_WHITESPACE, T_COMMENT, T_NS_SEPARATOR, T_STRING])
+                    && $this->checkTockenIn($tokens, $pos-1, 1,
+                        ['.', ',', ':', ')', '*', '/', '-', '+', '%', '|', '&', '^', '!', ']', '>', '<', '?', ';',
+                            T_BOOLEAN_AND, T_BOOLEAN_OR, T_COALESCE, T_SL, T_SPACESHIP, T_SR,
+                            T_IS_NOT_EQUAL, T_IS_EQUAL, T_IS_GREATER_OR_EQUAL, T_IS_IDENTICAL, T_IS_NOT_EQUAL, T_IS_SMALLER_OR_EQUAL
+                        ])
+                ) {
+                    $constants[] = $nameConstant;
+                }
+                $nameConstant = '';
+            }
         }
 
         return array_unique($constants);
@@ -584,6 +592,7 @@ class NamespaceAnalyzer implements ContentAnalyzer
         $isAlias = false;
 
         $isFunction = false;
+        $isConst = false;
 
         foreach ($tokens as $pos => $token) {
             if (!$isUse) {
@@ -592,8 +601,14 @@ class NamespaceAnalyzer implements ContentAnalyzer
                     continue;
                 }
 
+                if (!$isConst && is_array($token) && $token[0] === T_CONST) {
+                    $isConst = true;
+                    continue;
+                }
+
                 if ($isFunction && $token === ';') {
                     $isFunction = false;
+                    $isConst = false;
                     continue;
                 }
 
