@@ -87,17 +87,13 @@ class Resolver
     {
 
         $md5classname = md5($classname);
-//        echo $classname . ' - '.self::$apcuPrefix . $md5classname;
         $value = apcu_fetch(self::$apcuPrefix . $md5classname);
         if ($value === false) {
-//            echo 'false';
             if (self::restore($md5classname)) {
                 return true;
             }
-//            self::useComposer();
             return false;
         }
-//        var_dump($value);
         self::includeFiles($value);
     }
 
@@ -134,41 +130,6 @@ class Resolver
             includeFile(self::$baseDir . $file);
         }
     }
-
-//    static protected function generateCache()
-//    {
-////        // десь надо будет пробегаться по всем файлам и сaмим все собирать,
-////        // но пока бeрем данные от composer;
-//// for example https://github.com/dmkuznetsov/php-autoloader/blob/master/src/Autoload.php
-//        $classMap = require __DIR__ . '/../../../composer/autoload_classmap.php';
-//        if (!is_array($classMap)) {
-//            return false;
-//        }
-//        if (self::$cacheDir && (!is_dir(self::$cacheDir) || !is_writable(self::$cacheDir))) {
-//            self::$cacheDir = null;
-//        }
-//
-//        foreach ($classMap as $classname => $filename) {
-//            $md5classname = md5($classname);
-//            apcu_store(self::$apcuPrefix . $md5classname, $filename);
-//            if (self::$cacheDir) {
-//                file_put_contents(self::$cacheDir . '/' . $md5classname, $filename);
-//            }
-//        }
-////        $classMap;
-//
-////        $directory = new \RecursiveDirectoryIterator(self::$baseDir);
-////        $iterator = new \RecursiveIteratorIterator($directory);
-////        $files = array();
-////        foreach ($iterator as $info) {
-////            if ($info->getFilename() == 'composer.json') {
-////                echo  $info->getPathname();
-////            }
-////        }
-//    }
-
-
-
 }
 
 function includeFile($file)

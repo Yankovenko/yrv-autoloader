@@ -2,8 +2,6 @@
 
 namespace YRV\Autoloader\Parser;
 
-use GuzzleHttp\Psr7\Stream;
-
 require __DIR__ . '/components.php';
 require __DIR__ . '/analyzers.php';
 
@@ -122,20 +120,10 @@ class Scaner
         $dev = false;
 
         try {
-            // сканирует и парсит все композер файлы
-//            $this->scanAllComposerFiles($this->baseDir);
-//            print_r($this->composersData);
-//            die();
-//
-//            //
             $this->debug('Included files', $this->includeFiles);
             $this->debug('Resources files', $this->resourceFiles);
             $this->debug('Library files', $this->libraryFiles);
 
-//            $files = $this->getFilesForIncludes($dev);
-//print_r ($files);
-//die();
-            //
             // наполняет this->included['constants'] & ['functions']
             $refResources = $this->getResourceReferencesFromFiles($this->resourceFiles);
 
@@ -145,8 +133,6 @@ class Scaner
 
             $this->debug('Result scaning', $data);
 
-            //print_r ($data);
-//die();
             $dependencies = $this->makeDependencies($data, $refResources);
 
             $this->debug('Dependencies', $dependencies);
@@ -159,16 +145,10 @@ class Scaner
             echo "Create/updated cache files: {$this->stat['c']}\n";
             echo "Create/updated dependencies files: {$this->stat['d']}\n";
 
-
-
         } catch (\Throwable $exception) {
             $this->addError($exception->getMessage());
             die();
         }
-
-
-//        print_r($data);
-
     }
 
     protected function makeIncludeFile (array $files)
@@ -219,20 +199,10 @@ class Scaner
                     }
                 });
             }
-
-
-            //            if (!empty($datum['uc'])) {
-//                array_walk($datum['uc'], function($name) use (&$usedConstants, $hash) {$usedConstants[$name] = $hash;});
-//            }
-//            if (!empty($datum['cf'])) {
-//                array_walk($datum['cf'], function($name) use (&$calledFunctions, $hash) {$calledFunctions[$name] = $hash;});
-//            }
         }
-//        print_r ($included);
+
         foreach ($objects as $name => &$object) {
             $hash = $object['h'];
-            // если испоьзуются константы которые где-то объявлены,
-            // то добавляем зависимость
             if (isset($object['uc'])) {
                 foreach ($object['uc'] as $constantName) {
                     if (isset($refResources['constants'][$constantName])) {
@@ -259,7 +229,6 @@ class Scaner
 
 
         do {
-//            echo 'OnceAgain+';
             $onceAgain = false;
             foreach ($objects as $name => &$object) {
                 if (!isset($object['r'])) {
@@ -407,7 +376,6 @@ class Scaner
         }
         try {
             $components = $this->fileAnalyzer->analyze($file);
-//            print_r($components);
         } catch (\Throwable $exception) {
             $this->addError(
                 'Error analyze file [%s]: %s',
@@ -481,15 +449,6 @@ class Scaner
     protected function filterConstants(array $constants, $namespace = '',  $aliases = [], $canShortNameUse = false)
     {
         return $this->normalizeNames($constants, $namespace, $aliases, $this->systemConstants, $this->systemConstantsUnregistred, $canShortNameUse);
-
-//        return array_filter($constants, function ($name) {
-//            if (isset($this->systemConstants[$name])) {
-//                return false;
-//            } elseif (isset($this->systemConstantsUnregistred[strtolower($name)])) {
-//                return false;
-//            }
-//            return true;
-//        }, ARRAY_FILTER_USE_BOTH);
     }
 
     protected function normalizeNames($names, $namespace = '', $aliases = [], $excludeNames = [], $excludeUnregisterNames = [], $canShortNameUse = false): array
@@ -532,70 +491,17 @@ class Scaner
             }
         }
 
-//        $results = [];
-//        $prefix = $this->name ? $this->name . '\\' : '';
-//        foreach ($names as $name) {
-//            if (isset($this->uses[$name])) {
-//                $results[] = $this->uses[$name];
-//            } elseif ($forFunction || strpos($name, '\\') === 0) {
-//                $results[] = $name;
-//            } else {
-//                $results[] = $prefix . $name;
-//            }
-//        }
         return array_unique($results);
     }
 
     protected function filterFunctions(array $functions, $namespace = '', $aliases = [], $canShortNameUse = false)
     {
-
         return $this->normalizeNames($functions, $namespace, $aliases, $this->systemFunctions, [], $canShortNameUse);
-
-//        return array_filter($functions, function ($name) {
-//            if (substr($name, 0, 1) == '\\') {
-//                $name = substr($name, 1);
-//            }
-//            if (in_array($name, $this->systemFunctions)) {
-//                return false;
-//            }
-//            return true;
-//        }, ARRAY_FILTER_USE_BOTH);
-
-//        foreach ($functions as $key => $name) {
-//
-//            $fullname = $name;
-//            if (substr($name, 0, 1) == '\\') {
-//                $fullname = $name = substr($name, 1);
-//            } elseif ($namespace) {
-//                $fullname = $namespace . '\\' . $name;
-//            }
-//            if (in_array($name, $this->systemFunctions)) {
-//                unset ($functions[$key]);
-//                continue;
-//            }
-//            $functions[] = $name;
-//
-//            if ($namespace && strpos($name, '\\') === false) {
-//                $functions[] = $fullname;
-//            }
-//        }
-//
-//        return $functions;
     }
 
     protected function filterObjects(array $objects, $namespace = '', $aliases = [])
     {
         return $this->normalizeNames($objects, $namespace, $aliases, $this->systemObjects, []);
-
-//        return array_filter($objects, function ($name) {
-//            if (substr($name, 0, 1) == '\\') {
-//                $name = substr($name, 1);
-//            }
-//            if (in_array($name, $this->systemObjects)) {
-//                return false;
-//            }
-//            return true;
-//        }, ARRAY_FILTER_USE_BOTH);
     }
 
 
@@ -612,19 +518,12 @@ class Scaner
             }
 
             if ($info->getFilename() == 'composer.json') {
-//                var_dump($info);
                 $composerFilepath = realpath($info->getPath());
-//                die();
                 $this->scanComposerFile($info, $addInclude);
             }
         }
 
 
-//        if (isset($data['f'])) {
-//            $this->parseIncludedFiles($data['f']);
-//        }
-//        print_r ($data);
-//        die();
     }
 
     public function scanComposerFile($file, $addInclude = false, $useDevelop = false): void
@@ -656,7 +555,6 @@ class Scaner
 
         $map1 = $useDevelop ? ['autoload', 'autoload-dev'] : ['autoload'];
         $map2 = ['classmap', 'psr-4', 'psr-0'];
-//        'exclude-from-classmap'
 
         $allFiles = [];
         foreach ($map1 as $v1) {
@@ -701,7 +599,7 @@ class Scaner
         $files = [];
         do {
             $item = current($subitems);
-        //foreach ($subitems as $item) {
+            
             if (is_array($item)) {
                 array_push($subitems, ...$item);
                 continue;
