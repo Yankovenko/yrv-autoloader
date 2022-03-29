@@ -2,10 +2,10 @@
 
 namespace YRV\Autoloader\Parser;
 
-require __DIR__ . '/components.php';
-require __DIR__ . '/analyzers.php';
+require_once __DIR__ . '/components.php';
+require_once __DIR__ . '/analyzers.php';
 
-class Scaner
+class Scanner
 {
     protected array $errors = [];
     protected $debugStream = null;
@@ -37,10 +37,17 @@ class Scaner
     public function __construct(?string $baseDir = null, ?string $cacheDir = null, $errorStream = null, $debugStream = null)
     {
         $this->baseDir = realpath($baseDir ? $baseDir : __DIR__ . '/../../../..');
-        $this->cacheDir = realpath($cacheDir ? $cacheDir : __DIR__ .'/../../cache');
+        $this->cacheDir = $cacheDir ? $cacheDir : realpath(__DIR__ .'/../..') . '/cache';
+
+        if (!is_dir($this->cacheDir)) {
+            if (!@mkdir($this->cacheDir, 0777)) {
+                throw new \Exception('Error create cache dir: '.$this->cacheDir);
+            }
+        }
         $this->cacheDirFiles = $this->cacheDir . '/files';
+
         if (!is_dir($this->cacheDirFiles)) {
-            if (!mkdir($this->cacheDirFiles, 0777)) {
+            if (!@mkdir($this->cacheDirFiles, 0777)) {
                 throw new \Exception('Error create cache dir: '.$this->cacheDirFiles);
             }
         }
@@ -117,14 +124,12 @@ class Scaner
     public function run($recreateCache=null)
     {
 
-        $dev = false;
-
         try {
             $this->debug('Included files', $this->includeFiles);
             $this->debug('Resources files', $this->resourceFiles);
             $this->debug('Library files', $this->libraryFiles);
 
-            // наполняет this->included['constants'] & ['functions']
+            // fill this->included['constants'] & ['functions']
             $refResources = $this->getResourceReferencesFromFiles($this->resourceFiles);
 
             $this->debug('Ref resoureces', $refResources);
@@ -327,6 +332,12 @@ class Scaner
         return $refResources;
     }
 
+    /**
+     * @param $files
+     * @param $recreateCache bool|null  - true - update, false - not use, null - update if change
+     * @return array
+     * @throws \Throwable
+     */
     public function scanFiles($files, $recreateCache=null): array
     {
         $result = [];

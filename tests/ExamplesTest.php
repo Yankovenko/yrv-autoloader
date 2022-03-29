@@ -2,13 +2,13 @@
 
 namespace Tests;
 
-use YRV\Autoloader\Parser\Scaner;
+use YRV\Autoloader\Parser\Scanner;
 
 class ExamplesTest extends TestCase
 {
     public function testArtisanServiceProviderFile()
     {
-        $scaner = new Scaner();
+        $scaner = new Scanner();
         $result = $scaner->scanFile(__DIR__ . '/examples/ArtisanServiceProvider.php', false);
         $this->assertEmpty($result['c']);
         $this->assertEmpty($result['f']);
@@ -22,7 +22,7 @@ class ExamplesTest extends TestCase
 
     public function testIlluminateConsoleSheduleEventFile()
     {
-        $scaner = new Scaner();
+        $scaner = new Scanner();
         $result = $scaner->scanFile(__DIR__ . '/examples/Event.php', false);
         $this->assertEmpty($result['c']);
         $this->assertEmpty($result['f']);
@@ -48,7 +48,7 @@ class ExamplesTest extends TestCase
 
     public function testExampleClassFile()
     {
-        $scaner = new Scaner();
+        $scaner = new Scanner();
         $result = $scaner->scanFile(__DIR__ . '/examples/ExampleClass.php', false);
 
         $this->assertEmpty($result['c']);
@@ -66,7 +66,7 @@ class ExamplesTest extends TestCase
 
     public function testMacroableFile()
     {
-        $scaner = new Scaner();
+        $scaner = new Scanner();
         $result = $scaner->scanFile(__DIR__ . '/examples/Macroable.php', false);
         $this->assertEmpty($result['f']);
         $this->assertEmpty($result['c']);
@@ -78,7 +78,7 @@ class ExamplesTest extends TestCase
 
     public function testGlFile()
     {
-        $scaner = new Scaner();
+        $scaner = new Scanner();
         $result = $scaner->scanFile(__DIR__ . '/examples/gl.php', false);
 
         $this->assertEmpty($result['f']);
@@ -92,7 +92,7 @@ class ExamplesTest extends TestCase
 
     public function testArrFile()
     {
-        $scaner = new Scaner();
+        $scaner = new Scanner();
         $result = $scaner->scanFile(__DIR__ . '/examples/Arr.php', false);
         $this->assertEmpty($result['f']);
         $this->assertEmpty($result['c']);
@@ -112,7 +112,7 @@ class ExamplesTest extends TestCase
 
     public function testConstantsFile()
     {
-        $scaner = new Scaner();
+        $scaner = new Scanner();
         $result = $scaner->scanFile(__DIR__ . '/examples/constants.php', false);
         $this->assertEmpty($result['f']);
         $this->assertEmpty($result['o']);

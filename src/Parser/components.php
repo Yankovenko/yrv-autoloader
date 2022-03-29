@@ -36,28 +36,28 @@ abstract class PhpComponent
 class NamespaceComponent extends PhpComponent
 {
     /** @var array  */
-    public $uses = [];
+    public array $uses = [];
 
     /** @var ClassComponent[]  */
-    public $classes = [];
+    public array $classes = [];
 
     /** @var TraitComponent[] */
-    public $traits = [];
+    public array $traits = [];
 
     /** @var FunctionComponent[] */
-    public $functions = [];
+    public array $functions = [];
 
     /** @var InterfaceComponent[]  */
-    public $interfaces = [];
+    public array $interfaces = [];
 
     /** @var array  */
-    public $constants = [];
+    public array $constants = [];
 
     /** @var array  */
-    public $usedConstants = [];
+    public array $usedConstants = [];
 
     /** @var array  */
-    public $callFunctions = [];
+    public array $callFunctions = [];
 
     public function getNamespace(): string
     {
@@ -66,34 +66,12 @@ class NamespaceComponent extends PhpComponent
 
     public function getDeclaredFunctions(): array
     {
-        return array_map( fn($object) => $object->name, $this->functions);
-//
-//        //        return $this->functions;
-//        $functions = [];
-////        $prefix = $this->name ? $this->name . '\\' : '';
-//
-//        foreach ($this->functions as $function) {
-////            if ($function->name) {
-//                $functions[] = $prefix . $function->name;
-////            }
-//        }
-//        return $functions;
+        return array_map(fn($object) => $object->name, $this->functions);
     }
 
     public function getDeclaredConstants(): array
     {
         return $this->constants;
-//        $prefix = $this->name ? $this->name . '\\' : '';
-//        if (!$prefix) {
-//            return $this->constants;
-//        }
-//
-//        return array_map(function($name) use ($prefix) {
-//            if (strpos($name, '\\') === 0) {
-//                return substr($name, 1);
-//            }
-//            return $prefix.$name;
-//        }, $this->constants);
     }
 
     public function getUsedConstants($includeObjects = false): array
@@ -173,18 +151,18 @@ class NamespaceComponent extends PhpComponent
 
 class InterfaceComponent extends PhpComponent
 {
-    public $methods = [];
-    public $extends = [];
-    public $usedConstatns = [];
+    public array $methods = [];
+    public ?string $extends = null;
+    public array $usedConstants = [];
 
 }
 
 class TraitComponent extends PhpComponent
 {
-    public $methods = [];
-    public $traits = [];
-    public $properties = [];
-    public $callFunctions = [];
+    public array $methods = [];
+    public array $traits = [];
+    public array $properties = [];
+    public array $callFunctions = [];
 
     public function getCalledFunctions($includeObjects = false): array
     {
@@ -199,15 +177,14 @@ class TraitComponent extends PhpComponent
 
 class ClassComponent extends InterfaceComponent
 {
-    public $interfaces = [];
-    public $extends;
-    public $traits = [];
-    public $methods = [];
-    public $isAnonym = false;
-    public $isAbstract = false;
-    public $isFinal = false;
-    public $constants = [];
-    public $properties = [];
+    public array $interfaces = [];
+    public ?string $extends = null;
+    public array $traits = [];
+    public array $methods = [];
+    public bool $isAbstract = false;
+    public bool $isFinal = false;
+    public array $constants = [];
+    public array $properties = [];
 
     public function getCalledFunctions(): array
     {
@@ -222,16 +199,15 @@ class ClassComponent extends InterfaceComponent
 
 class FunctionComponent extends PhpComponent
 {
-    public $params = [];
+    public array $params = [];
     public $returnType;
     public $visibility;
     public $isStatic = false;
-    public $isAnonym = false;
     public $isAbstract = false;
     public $isFinal = false;
-    public $callFunctions = [];
-    public $instantiated = [];
-    public $usedConstants = [];
+    public array $callFunctions = [];
+    public array $instantiated = [];
+    public array $usedConstants = [];
 
     public function getCalledFunctions(): array
     {
@@ -242,17 +218,17 @@ class FunctionComponent extends PhpComponent
 class VariableComponent extends PhpComponent
 {
     public $type;
-    public $hasDefaultValue = false;
+    public bool $hasDefaultValue = false;
     public $defaultValue;
 }
 
 class ParamComponent extends VariableComponent
 {
-    public $isVariadic = false;
+    public bool $isVariadic = false;
 }
 
 class PropertyComponent extends VariableComponent
 {
-    public $isStatic = false;
+    public bool $isStatic = false;
     public $visibility;
 }

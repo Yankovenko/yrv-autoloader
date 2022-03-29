@@ -1,23 +1,28 @@
 <?php
+
 namespace YRV\Autoloader\Parser;
+
+use Exception;
+use Generator;
 
 interface ContentAnalyzer
 {
-    public function extract(array &$tokens, $deleteExtracted=false): \Generator;
+    public function extract(array &$tokens, $deleteExtracted = false): Generator;
 }
 
-trait ComponentAnalyzerLibrary {
+trait ComponentAnalyzerLibrary
+{
 
-    protected static $namespaceAnalyzerStatic;
-    protected static $classAnalyzerStatic;
-    protected static $interfaceAnalyzerStatic;
-    protected static $traitAnalyzerStatic;
-    protected static $functionAnalyzerStatic;
-    protected static $paramAnalyzerStatic;
+    protected static NamespaceAnalyzer $namespaceAnalyzerStatic;
+    protected static ClassAnalyzer $classAnalyzerStatic;
+    protected static InterfaceAnalyzer $interfaceAnalyzerStatic;
+    protected static TraitAnalyzer $traitAnalyzerStatic;
+    protected static FunctionAnalyzer $functionAnalyzerStatic;
+    protected static ParamAnalyzer $paramAnalyzerStatic;
 
     public function getNamespaceAnalyzer(): NamespaceAnalyzer
     {
-        if (!static::$namespaceAnalyzerStatic) {
+        if (!isset(static::$namespaceAnalyzerStatic)) {
             static::$namespaceAnalyzerStatic = new NamespaceAnalyzer();
         }
         return static::$namespaceAnalyzerStatic;
@@ -25,7 +30,7 @@ trait ComponentAnalyzerLibrary {
 
     public function getClassAnalyzer(): ClassAnalyzer
     {
-        if (!static::$classAnalyzerStatic) {
+        if (!isset(static::$classAnalyzerStatic)) {
             static::$classAnalyzerStatic = new ClassAnalyzer();
         }
         return static::$classAnalyzerStatic;
@@ -33,7 +38,7 @@ trait ComponentAnalyzerLibrary {
 
     public function getInterfaceAnalyzer(): InterfaceAnalyzer
     {
-        if (!static::$interfaceAnalyzerStatic) {
+        if (!isset(static::$interfaceAnalyzerStatic)) {
             static::$interfaceAnalyzerStatic = new InterfaceAnalyzer();
         }
         return static::$interfaceAnalyzerStatic;
@@ -41,7 +46,7 @@ trait ComponentAnalyzerLibrary {
 
     public function getTraitAnalyzer(): TraitAnalyzer
     {
-        if (!static::$traitAnalyzerStatic) {
+        if (!isset(static::$traitAnalyzerStatic)) {
             static::$traitAnalyzerStatic = new TraitAnalyzer();
         }
         return static::$traitAnalyzerStatic;
@@ -49,7 +54,7 @@ trait ComponentAnalyzerLibrary {
 
     public function getFunctionAnalyzer(): FunctionAnalyzer
     {
-        if (!static::$functionAnalyzerStatic) {
+        if (!isset(static::$functionAnalyzerStatic)) {
             static::$functionAnalyzerStatic = new FunctionAnalyzer();
         }
         return static::$functionAnalyzerStatic;
@@ -57,14 +62,22 @@ trait ComponentAnalyzerLibrary {
 
     public function getParamAnalyzer(): ParamAnalyzer
     {
-        if (!static::$paramAnalyzerStatic) {
+        if (!isset(static::$paramAnalyzerStatic)) {
             static::$paramAnalyzerStatic = new ParamAnalyzer();
         }
         return static::$paramAnalyzerStatic;
     }
 
-    protected function checkTockenIn(&$tokens, int $from = 0, $shift = 1, array $inWhere, array $skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT]) {
-        while(isset($tokens[($from += $shift)])) {
+    protected function checkTokenIn(
+        &$tokens,
+        array $inWhere,
+        int $from = 0,
+        bool $directionForward = true,
+        array $skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT]
+    ): bool
+    {
+
+        while (isset($tokens[($from += $directionForward ? 1 : -1)])) {
 
             if (in_array(
                 is_array($tokens[$from]) ? $tokens[$from][0] : $tokens[$from],
@@ -107,21 +120,20 @@ trait ComponentAnalyzerLibrary {
 
             if (in_array($token[0], [T_STRING, T_NS_SEPARATOR], true)) {
                 $extended .= $token[1];
-                continue;
             }
         }
 
         return $extended;
     }
 
-    protected function extractConstants(array &$tokens, $delete=false)
+    protected function extractConstants(array &$tokens, $delete = false): array
     {
         $name = '';
         $constFound = false;
         $constants = [];
 
         foreach ($tokens as $pos => $token) {
-            if (is_array($token) && $token[0] === T_CONST && !$this->checkTockenIn($tokens, $pos, -1, [T_USE])) {
+            if (is_array($token) && $token[0] === T_CONST && !$this->checkTokenIn($tokens, [T_USE], $pos, false)) {
                 $constFound = true;
                 if ($delete) {
                     unset($tokens[$pos]);
@@ -153,7 +165,7 @@ trait ComponentAnalyzerLibrary {
             }
         }
 
-        foreach ($tokens as $pos => $token) {
+        foreach ($tokens as $token) {
             if (is_array($token) && $token[0] === T_STRING && $token[1] == 'define') {
                 $constFound = true;
                 $name = '';
@@ -164,7 +176,7 @@ trait ComponentAnalyzerLibrary {
                 continue;
             }
 
-            if (!$name && in_array($token[0], [T_CONSTANT_ENCAPSED_STRING], true)) {
+            if (!$name && $token[0] === T_CONSTANT_ENCAPSED_STRING) {
                 $name = $token[1];
                 $name = '\\' . trim($name, '\'"');
                 $constants[] = $name;
@@ -180,15 +192,15 @@ trait ComponentAnalyzerLibrary {
         return $constants;
     }
 
-    protected function extractTraits(array $tokens)
+    protected function extractTraits(array $tokens): array
     {
         $name = '';
         $useFound = false;
         $isRedeclare = false;
-        $constants = [];
+        $traits = [];
 
         foreach ($tokens as $pos => $token) {
-            if (is_array($token) && $token[0] === T_USE && !$this->checkTockenIn($tokens, $pos, 1, ['('])) {
+            if (is_array($token) && $token[0] === T_USE && !$this->checkTokenIn($tokens, ['('], $pos)) {
                 $useFound = true;
                 continue;
             }
@@ -211,24 +223,26 @@ trait ComponentAnalyzerLibrary {
             }
 
             if ($token === '{') {
-                $constants[] = $name;
+                $traits[] = $name;
                 $name = '';
                 $isRedeclare = true;
-                continue;
             } elseif ($token === ',') {
-                $constants[] = $name;
+                $traits[] = $name;
                 $name = '';
             } elseif ($token === ';') {
-                $constants[] = $name;
+                $traits[] = $name;
                 $name = '';
                 $useFound = false;
             }
         }
 
-        return $constants;
+        return $traits;
     }
 
-    protected function extractName(array $tokens)
+    /**
+     * @throws Exception
+     */
+    protected function extractName(array $tokens): string
     {
         foreach ($tokens as $token) {
             if (is_array($token) && $token[0] === T_STRING) {
@@ -236,11 +250,14 @@ trait ComponentAnalyzerLibrary {
             }
         }
 
-        throw new \Exception("Name is missing");
+        throw new Exception("Name is missing");
     }
 
-
-    protected function extractProperties(array $tokens)
+    /**
+     * @param array $tokens
+     * @return PropertyComponent[]
+     */
+    protected function extractProperties(array $tokens): array
     {
         $properties = [];
 
@@ -270,7 +287,7 @@ trait ComponentAnalyzerLibrary {
                 continue;
             }
 
-            if ($currentProperty === null && is_array($token) && in_array($token[0], [T_VARIABLE], true)) {
+            if ($currentProperty === null && is_array($token) && $token[0] === T_VARIABLE) {
                 $currentProperty = new PropertyComponent();
                 $currentProperty->name = substr($token[1], 1);
 
@@ -323,7 +340,7 @@ trait ComponentAnalyzerLibrary {
         return $properties;
     }
 
-    protected function extractCalledFunctions(array $tokens)
+    protected function extractCalledFunctions(array $tokens): array
     {
         $called = [];
         $name = '';
@@ -337,7 +354,8 @@ trait ComponentAnalyzerLibrary {
         $posStart = null;
         foreach ($tokens as $pos => $token) {
             if (is_array($token)
-                && in_array($token[0], [T_STRING, T_NS_SEPARATOR], true)) {
+                && in_array($token[0], [T_STRING, T_NS_SEPARATOR], true)
+            ) {
                 $name .= $token[1];
                 $posStart = $posStart ?? $pos;
             } else {
@@ -346,11 +364,10 @@ trait ComponentAnalyzerLibrary {
                 continue;
             }
 
-            if (is_array($token)
-                && $token[0] === T_STRING
+            if ($token[0] === T_STRING
                 && isset($tokens[$pos + 1])
-                && $this->checkTockenIn($tokens, $pos, 1, ['('])
-                && !$this->checkTockenIn($tokens, $posStart, -1, [T_OBJECT_OPERATOR, T_NEW, T_PAAMAYIM_NEKUDOTAYIM])
+                && $this->checkTokenIn($tokens, ['('], $pos)
+                && !$this->checkTokenIn($tokens, [T_OBJECT_OPERATOR, T_NEW, T_PAAMAYIM_NEKUDOTAYIM], $posStart, false)
             ) {
                 $called[] = $name;
                 $name = '';
@@ -361,10 +378,9 @@ trait ComponentAnalyzerLibrary {
         return array_unique($called);
     }
 
-    protected function extractUsedConstants(array $tokens)
+    protected function extractUsedConstants(array $tokens): array
     {
         $constants = [];
-        $usedPos = [];
         $nameConstant = '';
 
         foreach ($tokens as $pos => $token) {
@@ -374,30 +390,22 @@ trait ComponentAnalyzerLibrary {
             } elseif (!$nameConstant) {
                 continue;
             }
-//
-//                if (!$nameConstant && (!is_array($token) || !in_array($token[0], [T_STRING, T_NS_SEPARATOR]))) {
-//                continue;
-//            } elseif ($nameConstant) {
-//                $nameConstant .= $token[0];
-//            } else {
-//                continue;
-//            }
 
             if (!in_array($token[0], [T_STRING, T_NS_SEPARATOR])) {
-                if ($this->checkTockenIn($tokens, $pos, -1,
+                if ($this->checkTokenIn($tokens,
                         ['.', ',', ':', '(', '*', '/', '-', '+', '%', '|', '&', '^', '!', '=', '[', '>', '<', '?',
                             T_BOOLEAN_AND, T_BOOLEAN_OR, T_COALESCE, T_SL, T_SPACESHIP, T_SR,
                             T_IS_NOT_EQUAL, T_IS_EQUAL, T_IS_GREATER_OR_EQUAL, T_IS_IDENTICAL, T_IS_NOT_EQUAL, T_IS_SMALLER_OR_EQUAL,
                             //
                             T_CONCAT_EQUAL, T_DIV_EQUAL, T_AND_EQUAL, T_COALESCE_EQUAL, T_MINUS_EQUAL, T_MOD_EQUAL, T_MUL_EQUAL,
                             T_OR_EQUAL, T_POW_EQUAL, T_SL_EQUAL, T_SR_EQUAL, T_XOR_EQUAL
-                        ],
+                        ], $pos, false,
                         [T_WHITESPACE, T_COMMENT, T_NS_SEPARATOR, T_STRING])
-                    && $this->checkTockenIn($tokens, $pos-1, 1,
+                    && $this->checkTokenIn($tokens,
                         ['.', ',', ':', ')', '*', '/', '-', '+', '%', '|', '&', '^', '!', ']', '>', '<', '?', ';',
                             T_BOOLEAN_AND, T_BOOLEAN_OR, T_COALESCE, T_SL, T_SPACESHIP, T_SR,
                             T_IS_NOT_EQUAL, T_IS_EQUAL, T_IS_GREATER_OR_EQUAL, T_IS_IDENTICAL, T_IS_NOT_EQUAL, T_IS_SMALLER_OR_EQUAL
-                        ])
+                        ], $pos - 1)
                 ) {
                     $constants[] = $nameConstant;
                 }
@@ -431,9 +439,9 @@ class FileAnalyzer implements ContentAnalyzer
         if (empty($tokens)) {
             return null;
         }
-        $tokens = array_map(function($token) {
+        $tokens = array_map(function ($token) {
             if (!is_array($token)) return $token;
-            $token[3] = token_name ($token[0]);
+            $token[3] = token_name($token[0]);
             return $token;
         }, $tokens);
 
@@ -444,7 +452,7 @@ class FileAnalyzer implements ContentAnalyzer
         return $components;
     }
 
-    public function extract(array &$tokens, $deleteExtracted=false): \Generator
+    public function extract(array &$tokens, $deleteExtracted = false): Generator
     {
         yield from $this->namespaceAnalyzer->extract($tokens, $deleteExtracted);
     }
@@ -452,10 +460,10 @@ class FileAnalyzer implements ContentAnalyzer
 
 class NamespaceAnalyzer implements ContentAnalyzer
 {
-    private $classAnalyzer;
-    private $functionAnalyzer;
-    private $interfaceAnalyzer;
-    private $traitAnalyzer;
+    private ClassAnalyzer $classAnalyzer;
+    private FunctionAnalyzer $functionAnalyzer;
+    private InterfaceAnalyzer $interfaceAnalyzer;
+    private TraitAnalyzer $traitAnalyzer;
     use ComponentAnalyzerLibrary;
 
     public function __construct()
@@ -466,14 +474,18 @@ class NamespaceAnalyzer implements ContentAnalyzer
         $this->traitAnalyzer = $this->getTraitAnalyzer();
     }
 
-    public function extract(array &$tokens, $deleteExtracted=false): \Generator
+    public function extract(array &$tokens, $deleteExtracted = false): Generator
     {
         foreach ($this->extractNamespaces($tokens) as $component) {
             yield $component;
         }
     }
 
-    private function extractNamespaces(array $tokens)
+    /**
+     * @param array $tokens
+     * @return NamespaceComponent[]
+     */
+    private function extractNamespaces(array $tokens): array
     {
         $namespaces = [];
 
@@ -545,7 +557,7 @@ class NamespaceAnalyzer implements ContentAnalyzer
         }
 
         $namespaces = array_map(function (NamespaceComponent $namespace) use ($tokens) {
-            $namespaceTokens = array_slice($tokens, $namespace->tokenStartPos, $namespace->tokenEndPos - $namespace->tokenStartPos+1, true);
+            $namespaceTokens = array_slice($tokens, $namespace->tokenStartPos, $namespace->tokenEndPos - $namespace->tokenStartPos + 1, true);
 
             foreach ($this->classAnalyzer->extract($namespaceTokens, true) as $classComponent) {
                 $namespace->classes[] = $classComponent;
@@ -578,10 +590,9 @@ class NamespaceAnalyzer implements ContentAnalyzer
         return $namespaces;
     }
 
-    private function extractUsedNames(array $tokens)
+    private function extractUsedNames(array $tokens): array
     {
-        $classes = [];
-        $functions = [];
+        $names = [];
         $currentClass = '';
         $currentAlias = '';
         $currentShortName = '';
@@ -594,7 +605,7 @@ class NamespaceAnalyzer implements ContentAnalyzer
         $isFunction = false;
         $isConst = false;
 
-        foreach ($tokens as $pos => $token) {
+        foreach ($tokens as $token) {
             if (!$isUse) {
                 if (!$isFunction && is_array($token) && $token[0] === T_FUNCTION) {
                     $isFunction = true;
@@ -628,9 +639,9 @@ class NamespaceAnalyzer implements ContentAnalyzer
                 }
 
                 if (!$isAlias) {
-                    $classes[$currentShortName] = $currentClass;
+                    $names[$currentShortName] = $currentClass;
                 } else {
-                    $classes[$currentAlias] = $currentClass;
+                    $names[$currentAlias] = $currentClass;
                 }
 
                 if (in_array($token, [';', '}'])) {
@@ -661,7 +672,7 @@ class NamespaceAnalyzer implements ContentAnalyzer
             }
         }
 
-        return $classes;
+        return $names;
     }
 }
 
@@ -669,21 +680,20 @@ class InterfaceAnalyzer implements ContentAnalyzer
 {
     use ComponentAnalyzerLibrary;
 
-    private $functionAnalyzer;
+    private FunctionAnalyzer $functionAnalyzer;
 
     public function __construct()
     {
         $this->functionAnalyzer = $this->getFunctionAnalyzer();
     }
 
-    public function extract(array &$tokens, $deleteExtracted=false): \Generator
+    public function extract(array &$tokens, $deleteExtracted = false): Generator
     {
         $currentInterfaceTokens = [];
         $isInterface = false;
         $nestedLevel = 0;
 
         $startedPos = -1;
-        $endedPos = -1;
 
         foreach ($tokens as $pos => $token) {
             if (!isset($currentInterfaceTokens[0]) && is_array($token) && in_array($token[0], [T_INTERFACE], true)) {
@@ -735,7 +745,7 @@ class InterfaceAnalyzer implements ContentAnalyzer
         }
     }
 
-    private function createInterface(array $tokens)
+    private function createInterface(array $tokens): InterfaceComponent
     {
         $component = new InterfaceComponent();
 
@@ -762,7 +772,7 @@ class InterfaceAnalyzer implements ContentAnalyzer
         return $component;
     }
 
-    private function extractMethods(array $tokens)
+    private function extractMethods(array $tokens): array
     {
         $methods = [];
 
@@ -779,24 +789,23 @@ class TraitAnalyzer implements ContentAnalyzer
 {
     use ComponentAnalyzerLibrary;
 
-    private $functionAnalyzer;
+    private FunctionAnalyzer $functionAnalyzer;
 
     public function __construct()
     {
         $this->functionAnalyzer = $this->getFunctionAnalyzer();
     }
 
-    public function extract(array &$tokens, $deleteExtracted=false): \Generator
+    public function extract(array &$tokens, $deleteExtracted = false): Generator
     {
         $currentTraitTokens = [];
         $isTrait = false;
         $nestedLevel = 0;
 
         $startedPos = -1;
-        $endedPos = -1;
 
         foreach ($tokens as $pos => $token) {
-            if (!isset($currentTraitTokens[0]) && is_array($token) && in_array($token[0], [T_TRAIT], true)) {
+            if (!isset($currentTraitTokens[0]) && is_array($token) && $token[0] === T_TRAIT) {
                 $isTrait = true;
                 $startedPos = $pos;
 
@@ -835,7 +844,7 @@ class TraitAnalyzer implements ContentAnalyzer
         }
     }
 
-    private function createTrait(array $tokens)
+    private function createTrait(array $tokens): TraitComponent
     {
         $component = new TraitComponent();
 
@@ -862,7 +871,7 @@ class TraitAnalyzer implements ContentAnalyzer
         return $component;
     }
 
-    private function extractMethods(array $tokens)
+    private function extractMethods(array $tokens): array
     {
         $methods = [];
 
@@ -878,14 +887,14 @@ class ClassAnalyzer implements ContentAnalyzer
 {
     use ComponentAnalyzerLibrary;
 
-    private $functionAnalyzer;
+    private FunctionAnalyzer $functionAnalyzer;
 
     public function __construct()
     {
         $this->functionAnalyzer = $this->getFunctionAnalyzer();
     }
 
-    public function extract(array &$tokens, $deleteExtracted=false): \Generator
+    public function extract(array &$tokens, $deleteExtracted = false): Generator
     {
         $currentClassTokens = [];
         $isClass = false;
@@ -898,7 +907,7 @@ class ClassAnalyzer implements ContentAnalyzer
 
         foreach ($tokens as $pos => $token) {
             if (!isset($currentClassTokens[0]) && is_array($token) && in_array($token[0], [T_ABSTRACT, T_FINAL, T_CLASS], true)) {
-                if ($token[0] === T_CLASS && $this->checkTockenIn($tokens, $pos, -1, [T_DOUBLE_COLON, T_PAAMAYIM_NEKUDOTAYIM])) {
+                if ($token[0] === T_CLASS && $this->checkTokenIn($tokens, [T_DOUBLE_COLON, T_PAAMAYIM_NEKUDOTAYIM], $pos, false)) {
                     continue;
                 }
                 $followingTokens = array_slice($tokens, $pos + 1, 4);
@@ -970,7 +979,6 @@ class ClassAnalyzer implements ContentAnalyzer
             }
         }
 
-
         $component->properties = $this->extractProperties($innerTokens);
         foreach ($this->extractMethods($innerTokens, true) as $method) {
             $method->tokenStartPos += $pos + 1;
@@ -1019,7 +1027,7 @@ class ClassAnalyzer implements ContentAnalyzer
         return $interfaces;
     }
 
-    private function extractMethods(array &$tokens, $deleteExtracted=false)
+    private function extractMethods(array &$tokens, $deleteExtracted = false): array
     {
         $methods = [];
 
@@ -1036,24 +1044,23 @@ class FunctionAnalyzer implements ContentAnalyzer
 {
     use ComponentAnalyzerLibrary;
 
-    private $paramAnalyzer;
+    private ParamAnalyzer $paramAnalyzer;
 
     public function __construct()
     {
         $this->paramAnalyzer = $this->getParamAnalyzer();
     }
 
-    public function extract(array &$tokens, $deleteExtracted=false): \Generator
+    public function extract(array &$tokens, $deleteExtracted = false): Generator
     {
         $isMethod = false;
         $isAbstract = false;
         $isStatic = false;
         $isFinal = false;
-        $isAnonym = false;
         $finished = false;
         $visibility = 'public';
         $nestedLevel = 0;
-        $startedPos;
+        $startedPos = null;
 
         $currFunctionTokens = [];
 
@@ -1079,10 +1086,10 @@ class FunctionAnalyzer implements ContentAnalyzer
 
                     $followingTypes[] = $followingToken[0];
                 }
-                if ($token[0] === T_FUNCTION && $this->checkTockenIn($tokens, $pos, -1, [T_USE])) {
+                if ($token[0] === T_FUNCTION && $this->checkTokenIn($tokens, [T_USE], $pos, false)) {
                     continue;
                 }
-                if ($token[0] === T_FUNCTION && $this->checkTockenIn($tokens, $pos, 1, ['('])) {
+                if ($token[0] === T_FUNCTION && $this->checkTokenIn($tokens, ['('], $pos)) {
                     continue;
                 }
 
@@ -1154,7 +1161,6 @@ class FunctionAnalyzer implements ContentAnalyzer
                 $isAbstract = false;
                 $isStatic = false;
                 $isFinal = false;
-                $isAnonym = false;
                 $visibility = 'public';
                 $nestedLevel = 0;
                 $startedPos = null;
@@ -1182,7 +1188,7 @@ class FunctionAnalyzer implements ContentAnalyzer
 
         try {
             $functionComponent->name = $this->extractName($headerTokens);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             //var_dump($e->getTrace());
         }
 
@@ -1244,8 +1250,7 @@ class FunctionAnalyzer implements ContentAnalyzer
     }
 
 
-
-    private function extractReturnTypeHint(array $tokens)
+    private function extractReturnTypeHint(array $tokens): ?string
     {
         $typehint = null;
 
@@ -1278,7 +1283,7 @@ class FunctionAnalyzer implements ContentAnalyzer
 
 class ParamAnalyzer implements ContentAnalyzer
 {
-    public function extract(array &$tokens, $deleteExtracted=false): \Generator
+    public function extract(array &$tokens, $deleteExtracted = false): Generator
     {
         $inParam = false;
         $isAssignment = false;

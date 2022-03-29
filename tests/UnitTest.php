@@ -2,13 +2,13 @@
 
 namespace Tests;
 
-use YRV\Autoloader\Parser\Scaner;
+use YRV\Autoloader\Parser\Scanner;
 
 class UnitTest extends TestCase
 {
     public function testTrimFunction()
     {
-        $scaner = new Scaner('/var/www');
+        $scaner = new Scanner('/var/www');
 
         $path = '/var/www/path1/path2/path3';
         $this->assertEquals('/path1/path2/path3', $scaner->trimPath($path));

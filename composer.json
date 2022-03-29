@@ -1,7 +1,8 @@
 {
   "name": "yrv/autoloader",
-  "description": "Faster autoloader",
+  "description": "Fastest autoloader",
   "type": "library",
+  "version": "0.2",
   "keywords": [
     "autoloader"
   ],
