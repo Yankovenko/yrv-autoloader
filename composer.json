@@ -2,7 +2,7 @@
   "name": "yrv/autoloader",
   "description": "Fastest autoloader",
   "type": "library",
-  "version": "0.2",
+  "version": "0.3",
   "keywords": [
     "autoloader"
   ],

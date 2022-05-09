@@ -14,7 +14,7 @@ class Resolver
         self::$baseDir = $baseDir;
 
         if (!self::checkApcuEnabled()) {
-            spl_autoload_register([self::class, 'resolveWhitoutApcu'], false, true);
+            spl_autoload_register([self::class, 'resolveWithoutApcu'], false, true);
             self::preloading();
             return;
         }
@@ -36,7 +36,7 @@ class Resolver
 
     static protected function hashUniqueKey($uniqueKey): string
     {
-
+        return md5((string)$uniqueKey);
     }
 
     static public function flush(string $uniqueKey = ''): bool
@@ -83,7 +83,7 @@ class Resolver
         apcu_store(self::$apcuKey, $key);
     }
 
-    static public function resolve($classname)
+    static public function resolve($classname): bool
     {
 
         $md5classname = md5($classname);
@@ -95,15 +95,17 @@ class Resolver
             return false;
         }
         self::includeFiles($value);
+        return true;
     }
 
-    static function resolveWhitoutApcu($classname)
+    static function resolveWithoutApcu($classname): bool
     {
-        if (!file_exists($cacheDir . $key)) {
+        $md5classname = md5($classname);
+        if (!file_exists(self::$cacheDir . $md5classname)) {
             return false;
         }
 
-        $filenames = file_get_contents($cacheDir . $key);
+        $filenames = file_get_contents(self::$cacheDir . $md5classname);
         self::includeFiles($filenames);
         return true;
     }

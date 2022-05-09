@@ -25,7 +25,7 @@ class Scanner
     protected array $systemFunctions;
     protected array $systemObjects;
 
-    protected array $stat = [];
+    protected array $stat = ['c' => 0, 'd' => 0];
 
     /**
      * @param string|null $baseDir
@@ -142,7 +142,7 @@ class Scanner
 
             $this->debug('Dependencies', $dependencies);
 
-            $this->createCacheAutload($dependencies);
+            $this->createCacheAutoload($dependencies);
 
             $this->makeIncludeFile($this->includeFiles);
 
@@ -162,7 +162,7 @@ class Scanner
         file_put_contents($this->cacheDir . '/!required', implode("\n", $files));
     }
 
-    protected function createCacheAutload($dependencies)
+    protected function createCacheAutoload($dependencies)
     {
         foreach ($dependencies as $hash => $dependency) {
             file_put_contents($this->cacheDir . '/'. $hash, implode("\n", $dependency));
@@ -656,7 +656,7 @@ class Scanner
 //        print_r ($pd);
         $step = 0;
         while (isset($bdd[$step]) && $bdd[$step] === $pd[$step]) {
-            array_shift(($np));
+            array_shift($np);
             $step++;
         }
         if ($step < sizeof($bdd)) {
