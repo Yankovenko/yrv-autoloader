@@ -5,6 +5,10 @@ namespace YRV\Autoloader\Parser;
 use Exception;
 use Generator;
 
+/**
+ * All in one file, because this should work without composer and without many includes
+ */
+
 interface ContentAnalyzer
 {
     public function extract(array &$tokens, $deleteExtracted = false): Generator;
@@ -20,6 +24,9 @@ trait ComponentAnalyzerLibrary
     protected static FunctionAnalyzer $functionAnalyzerStatic;
     protected static ParamAnalyzer $paramAnalyzerStatic;
 
+    /**
+     * @return NamespaceAnalyzer
+     */
     public function getNamespaceAnalyzer(): NamespaceAnalyzer
     {
         if (!isset(static::$namespaceAnalyzerStatic)) {
@@ -28,6 +35,9 @@ trait ComponentAnalyzerLibrary
         return static::$namespaceAnalyzerStatic;
     }
 
+    /**
+     * @return ClassAnalyzer
+     */
     public function getClassAnalyzer(): ClassAnalyzer
     {
         if (!isset(static::$classAnalyzerStatic)) {
@@ -36,6 +46,9 @@ trait ComponentAnalyzerLibrary
         return static::$classAnalyzerStatic;
     }
 
+    /**
+     * @return InterfaceAnalyzer
+     */
     public function getInterfaceAnalyzer(): InterfaceAnalyzer
     {
         if (!isset(static::$interfaceAnalyzerStatic)) {
@@ -44,6 +57,9 @@ trait ComponentAnalyzerLibrary
         return static::$interfaceAnalyzerStatic;
     }
 
+    /**
+     * @return TraitAnalyzer
+     */
     public function getTraitAnalyzer(): TraitAnalyzer
     {
         if (!isset(static::$traitAnalyzerStatic)) {
@@ -52,6 +68,9 @@ trait ComponentAnalyzerLibrary
         return static::$traitAnalyzerStatic;
     }
 
+    /**
+     * @return FunctionAnalyzer
+     */
     public function getFunctionAnalyzer(): FunctionAnalyzer
     {
         if (!isset(static::$functionAnalyzerStatic)) {
@@ -60,6 +79,9 @@ trait ComponentAnalyzerLibrary
         return static::$functionAnalyzerStatic;
     }
 
+    /**
+     * @return ParamAnalyzer
+     */
     public function getParamAnalyzer(): ParamAnalyzer
     {
         if (!isset(static::$paramAnalyzerStatic)) {
@@ -68,14 +90,21 @@ trait ComponentAnalyzerLibrary
         return static::$paramAnalyzerStatic;
     }
 
+    /**
+     * @param $tokens
+     * @param array $inWhere
+     * @param int $from
+     * @param bool $directionForward
+     * @param array $skip
+     * @return bool
+     */
     protected function checkTokenIn(
         &$tokens,
         array $inWhere,
         int $from = 0,
         bool $directionForward = true,
         array $skip = [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT]
-    ): bool
-    {
+    ): bool {
 
         while (isset($tokens[($from += $directionForward ? 1 : -1)])) {
 
@@ -99,6 +128,10 @@ trait ComponentAnalyzerLibrary
         return false;
     }
 
+    /**
+     * @param array $tokens
+     * @return string
+     */
     protected function extractExtends(array $tokens): string
     {
         $extended = '';
@@ -126,6 +159,11 @@ trait ComponentAnalyzerLibrary
         return $extended;
     }
 
+    /**
+     * @param array $tokens
+     * @param $delete
+     * @return array
+     */
     protected function extractConstants(array &$tokens, $delete = false): array
     {
         $name = '';
@@ -192,6 +230,10 @@ trait ComponentAnalyzerLibrary
         return $constants;
     }
 
+    /**
+     * @param array $tokens
+     * @return array
+     */
     protected function extractTraits(array $tokens): array
     {
         $name = '';
@@ -738,8 +780,6 @@ class InterfaceAnalyzer implements ContentAnalyzer
 
                     $currentInterfaceTokens = [];
                     $isInterface = false;
-                    $isFinal = false;
-                    $isAbstract = false;
                 }
             }
         }
@@ -1189,7 +1229,7 @@ class FunctionAnalyzer implements ContentAnalyzer
         try {
             $functionComponent->name = $this->extractName($headerTokens);
         } catch (Exception $e) {
-            //var_dump($e->getTrace());
+            // TODO information
         }
 
         $functionComponent->params = $this->extractParams($headerTokens);
