@@ -2,8 +2,27 @@
 
 namespace YRV\Autoloader\Parser;
 
-require_once __DIR__ . '/components.php';
-require_once __DIR__ . '/analyzers.php';
+use YRV\Autoloader\Parser\Analyzers\FileAnalyzer;
+
+require_once __DIR__ . '/Components/PHPComponent.php';
+require_once __DIR__ . '/Components/ClassComponent.php';
+require_once __DIR__ . '/Components/FunctionComponent.php';
+require_once __DIR__ . '/Components/InterfaceComponent.php';
+require_once __DIR__ . '/Components/NamespaceComponent.php';
+require_once __DIR__ . '/Components/ParamComponent.php';
+require_once __DIR__ . '/Components/PropertyComponent.php';
+require_once __DIR__ . '/Components/TraitComponent.php';
+require_once __DIR__ . '/Components/VariableComponent.php';
+
+require_once __DIR__ . '/Analyzers/InterfaceAnalyzer.php';
+require_once __DIR__ . '/Analyzers/ComponentAnalyzerLibrary.php';
+require_once __DIR__ . '/Analyzers/ClassAnalyzer.php';
+require_once __DIR__ . '/Analyzers/ContentAnalyzer.php';
+require_once __DIR__ . '/Analyzers/FileAnalyzer.php';
+require_once __DIR__ . '/Analyzers/FunctionAnalyzer.php';
+require_once __DIR__ . '/Analyzers/NamespaceAnalyzer.php';
+require_once __DIR__ . '/Analyzers/ParamAnalyzer.php';
+require_once __DIR__ . '/Analyzers/TraitAnalyzer.php';
 
 class Scanner
 {
@@ -25,6 +44,8 @@ class Scanner
     protected array $systemFunctions;
     protected array $systemObjects;
 
+    protected array $systemConstantsUnregistred = [];
+
     protected array $stat = ['c' => 0, 'd' => 0];
 
     /**
@@ -37,7 +58,12 @@ class Scanner
     public function __construct(?string $baseDir = null, ?string $cacheDir = null, $errorStream = null, $debugStream = null)
     {
         $this->baseDir = realpath($baseDir ? $baseDir : __DIR__ . '/../../../..');
-        $this->cacheDir = $cacheDir ? $cacheDir : realpath(__DIR__ .'/../..') . '/cache';
+        if ($cacheDir) {
+            if (!str_starts_with('/', $cacheDir)) {
+                $cacheDir = realpath($this->baseDir . DIRECTORY_SEPARATOR . $cacheDir);
+            }
+        }
+        $this->cacheDir = $cacheDir ?: realpath(__DIR__ .'/../..') . '/cache';
 
         if (!is_dir($this->cacheDir)) {
             if (!@mkdir($this->cacheDir, 0777)) {
@@ -56,10 +82,12 @@ class Scanner
         $this->systemFunctions = get_defined_functions()['internal'];
         $this->systemConstants = array_keys(get_defined_constants());
         $this->systemConstantsUnregistred = ['true','false','null'];
-        $this->systemObjects = array_merge(
-            get_declared_classes(),
-            get_declared_interfaces(),
-            get_declared_traits()
+        $this->systemObjects = array_filter(
+            array_merge(
+                get_declared_classes(),
+                get_declared_interfaces(),
+                get_declared_traits()
+            ), fn($item) => !str_contains($item, '\\')
         );
 
         if ($errorStream) {
@@ -171,7 +199,7 @@ class Scanner
     }
 
 
-    public function makeDependencies($data, $refResources)
+    public function makeDependencies($data, $refResources): array
     {
         $functions = [];
         $constants = [];
@@ -435,7 +463,7 @@ class Scanner
             );
             unset($component);
         }
-        array_walk($result, function ($item) {
+        array_walk($result, function (&$item) {
             $item = array_unique($item);
         });
 
@@ -472,10 +500,15 @@ class Scanner
             if (isset($aliases[$name])) {
                 $name = $aliases[$name];
                 $isGlobal = true;
-            }
-            if (substr($name, 0, 1) == '\\') {
+            } elseif (substr($name, 0, 1) == '\\') {
                 $name = substr($name, 1);
                 $isGlobal = true;
+            } elseif (str_contains($name, '\\')) {
+                $aliasName = strstr($name, '\\', true);
+                if (isset($aliases[$aliasName])) {
+                    $isGlobal = true;
+                    $name = $aliases[$aliasName] . substr($name, strlen($aliasName));
+                }
             }
 
             if (in_array($name, $excludeNames) || in_array($prefix . $name, $excludeNames)) {
@@ -533,8 +566,27 @@ class Scanner
                 $this->scanComposerFile($info, $addInclude);
             }
         }
+    }
 
 
+    public function scanDir(string $dir)
+    {
+        if (!is_dir($dir)) {
+            $this->addError(
+                'Directory [%s] not found',
+                $dir
+            );
+        }
+        $files = [];
+        $directory = new \RecursiveDirectoryIterator($dir);
+        $iterator = new \RecursiveIteratorIterator($directory);
+        foreach ($iterator as $item) {
+            if ($item->getExtension() === 'php') {
+                $files[$item->getPathname()] = true;
+            }
+        }
+        unset($iterator, $directory);
+        $this->libraryFiles = $files;
     }
 
     public function scanComposerFile($file, $addInclude = false, $useDevelop = false): void
