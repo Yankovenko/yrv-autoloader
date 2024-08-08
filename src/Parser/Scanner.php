@@ -549,8 +549,11 @@ class Scanner
     }
 
 
-    public function scanAllComposerFiles(string $dir, $addInclude = false)
+    public function scanAllComposerFiles(string $dir, $addInclude = false): void
     {
+        if (!str_starts_with($dir, '/')) {
+            $dir = realpath($this->baseDir . DIRECTORY_SEPARATOR . $dir);
+        }
         $directory = new \RecursiveDirectoryIterator($dir);
         $iterator = new \RecursiveIteratorIterator($directory);
         $files = array();
@@ -569,7 +572,7 @@ class Scanner
     }
 
 
-    public function scanDir(string $dir)
+    public function scanDir(string $dir): void
     {
         if (!is_dir($dir)) {
             $this->addError(
@@ -596,8 +599,8 @@ class Scanner
             $filename = $file->getPathname();
         } elseif (is_file($file)) {
             $filename = $file;
-        } elseif (is_file($this->baseDir . $file)) {
-            $filename = $this->baseDir . $file;
+        } elseif (is_file($this->baseDir . DIRECTORY_SEPARATOR . $file)) {
+            $filename = $this->baseDir . DIRECTORY_SEPARATOR . $file;
         } else {
             $filename = (string) $file;
             $body = false;
