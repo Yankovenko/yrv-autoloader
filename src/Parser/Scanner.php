@@ -51,7 +51,7 @@ class Scanner
     /**
      * @param string|null $baseDir
      * @param string|null $cacheDir
-     * @param $errorStream - resource streem | null = stderr | false - no out
+     * @param $errorStream - resource stream | null = stderr | false - no out
      * @param $debugStream - resource stream | true = stdout | null|false - no out
      * @throws \Exception
      */
@@ -66,14 +66,14 @@ class Scanner
         $this->cacheDir = $cacheDir ?: realpath(__DIR__ .'/../..') . '/cache';
 
         if (!is_dir($this->cacheDir)) {
-            if (!@mkdir($this->cacheDir, 0777)) {
+            if (!@mkdir($this->cacheDir, 0775)) {
                 throw new \Exception('Error create cache dir: '.$this->cacheDir);
             }
         }
         $this->cacheDirFiles = $this->cacheDir . '/files';
 
         if (!is_dir($this->cacheDirFiles)) {
-            if (!@mkdir($this->cacheDirFiles, 0777)) {
+            if (!@mkdir($this->cacheDirFiles, 0775)) {
                 throw new \Exception('Error create cache dir: '.$this->cacheDirFiles);
             }
         }
@@ -102,7 +102,7 @@ class Scanner
         }
     }
 
-    public function setDebugStream($stream)
+    public function setDebugStream($stream): void
     {
         if (!is_resource($stream)) {
             throw new \InvalidArgumentException('Stream must be a resource');
@@ -111,7 +111,7 @@ class Scanner
         $this->debugStream = $stream;
     }
 
-    public function setErrorStream($stream)
+    public function setErrorStream($stream): void
     {
         if (!is_resource($stream)) {
             throw new \InvalidArgumentException('Stream must be a resource');
@@ -120,7 +120,7 @@ class Scanner
         $this->errorStream = $stream;
     }
 
-    protected function addError($error, ...$args)
+    protected function addError($error, ...$args): void
     {
         if (!empty($args)) {
             $error = sprintf($error, ...$args);
@@ -133,7 +133,7 @@ class Scanner
         }
     }
 
-    protected function debug(...$args)
+    protected function debug(...$args): void
     {
         if (!$this->debugStream) {
             return;
@@ -149,7 +149,7 @@ class Scanner
     }
 
 
-    public function run($recreateCache=null)
+    public function run($recreateCache=null): void
     {
 
         try {
@@ -160,11 +160,11 @@ class Scanner
             // fill this->included['constants'] & ['functions']
             $refResources = $this->getResourceReferencesFromFiles($this->resourceFiles);
 
-            $this->debug('Ref resoureces', $refResources);
+            $this->debug('Ref resources', $refResources);
 
             $data = $this->scanFiles($this->libraryFiles, $recreateCache);
 
-            $this->debug('Result scaning', $data);
+            $this->debug('Result scanning', $data);
 
             $dependencies = $this->makeDependencies($data, $refResources);
 
@@ -184,7 +184,7 @@ class Scanner
         }
     }
 
-    protected function makeIncludeFile (array $files)
+    protected function makeIncludeFile (array $files): void
     {
         $files = array_map(fn($value) => $this->trimPath($value), $files);
         file_put_contents($this->cacheDir . '/!required', implode("\n", $files));
@@ -201,13 +201,7 @@ class Scanner
 
     public function makeDependencies($data, $refResources): array
     {
-        $functions = [];
-        $constants = [];
         $objects = [];
-        $usedConstants = [];
-        $calledFunctions = [];
-
-        $dependencies = [];
 
         foreach ($data as $hash => $datum) {
 
@@ -286,12 +280,7 @@ class Scanner
             $hash = md5($name);
             $object['h'] = $hash;
             $dependencies[$hash] = [$object['fp']];
-//            if (isset($object['rc'])) {
-//                $dependencies[$hash] = array_merge($dependencies[$hash], $object['rc']);
-//            }
-//            if (isset($object['rf'])) {
-//                $dependencies[$hash] = array_merge($dependencies[$hash], $object['rf']);
-//            }
+
             if (isset($object['r'])) {
                 $dependencies[$hash] = array_merge($dependencies[$hash], $object['r']);
             }
@@ -374,7 +363,7 @@ class Scanner
                 $trimfile = $this->trimPath($file);
                 $result[md5($trimfile)] = $this->scanFile($trimfile, $recreateCache);
             } catch (\Throwable $exception) {
-                throw $exception;
+                throw new \Exception(sprintf('Error scan file [%s]: %s', $file, $exception->getMessage()), 0, $exception);
             }
         }
         return $result;
@@ -474,9 +463,7 @@ class Scanner
         }
         if (!file_put_contents($fileCache, serialize($result))) {
             throw new \Exception(
-                sprintf('Error save cache file [%s]: %s', $fileCache, $exception->getMessage()),
-                0,
-                $exception
+                sprintf('Error save cache file [%s]', $fileCache),
             );
         }
 
@@ -485,7 +472,7 @@ class Scanner
 
     }
 
-    protected function filterConstants(array $constants, $namespace = '',  $aliases = [], $canShortNameUse = false)
+    protected function filterConstants(array $constants, $namespace = '',  $aliases = [], $canShortNameUse = false): array
     {
         return $this->normalizeNames($constants, $namespace, $aliases, $this->systemConstants, $this->systemConstantsUnregistred, $canShortNameUse);
     }
@@ -538,12 +525,12 @@ class Scanner
         return array_unique($results);
     }
 
-    protected function filterFunctions(array $functions, $namespace = '', $aliases = [], $canShortNameUse = false)
+    protected function filterFunctions(array $functions, $namespace = '', $aliases = [], $canShortNameUse = false): array
     {
         return $this->normalizeNames($functions, $namespace, $aliases, $this->systemFunctions, [], $canShortNameUse);
     }
 
-    protected function filterObjects(array $objects, $namespace = '', $aliases = [])
+    protected function filterObjects(array $objects, $namespace = '', $aliases = []): array
     {
         return $this->normalizeNames($objects, $namespace, $aliases, $this->systemObjects, []);
     }
@@ -566,7 +553,7 @@ class Scanner
 
             if ($info->getFilename() == 'composer.json') {
                 $composerFilepath = realpath($info->getPath());
-                $this->scanComposerFile($info, $addInclude);
+                $this->scanComposerFile($composerFilepath, $addInclude);
             }
         }
     }
@@ -626,7 +613,7 @@ class Scanner
         foreach ($map1 as $v1) {
             $libraryFiles = [];
             foreach ($map2 as $v2) {
-                if (isset($json[$v1][$v2]) && !empty($json[$v1][$v2])) {
+                if (!empty($json[$v1][$v2])) {
                     $libraryFiles = array_merge($libraryFiles, $this->getFilesForDirs($base, $json[$v1][$v2]));
                 }
             }
@@ -708,7 +695,6 @@ class Scanner
         $bdd = explode ('/', $this->baseDir);
         $pd = explode ('/', $path);
         $np = $pd;
-//        print_r ($pd);
         $step = 0;
         while (isset($bdd[$step]) && $bdd[$step] === $pd[$step]) {
             array_shift($np);
@@ -721,7 +707,7 @@ class Scanner
     }
 
 
-    protected function getFilesForIncludes($dev = false)
+    protected function getFilesForIncludes($dev = false): array
     {
         $includes = [];
         foreach ($this->composersData as $dir => $data) {
