@@ -15,8 +15,8 @@ require_once __DIR__ . '/Components/PropertyComponent.php';
 require_once __DIR__ . '/Components/TraitComponent.php';
 
 require_once __DIR__ . '/Analyzers/ContentAnalyzer.php';
-require_once __DIR__ . '/Analyzers/InterfaceAnalyzer.php';
 require_once __DIR__ . '/Analyzers/ComponentAnalyzerLibrary.php';
+require_once __DIR__ . '/Analyzers/InterfaceAnalyzer.php';
 require_once __DIR__ . '/Analyzers/ClassAnalyzer.php';
 require_once __DIR__ . '/Analyzers/FileAnalyzer.php';
 require_once __DIR__ . '/Analyzers/FunctionAnalyzer.php';
