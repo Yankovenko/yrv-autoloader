@@ -4,20 +4,20 @@ namespace YRV\Autoloader\Parser;
 
 use YRV\Autoloader\Parser\Analyzers\FileAnalyzer;
 
+require_once __DIR__ . '/Components/InterfaceComponent.php';
 require_once __DIR__ . '/Components/PHPComponent.php';
 require_once __DIR__ . '/Components/ClassComponent.php';
 require_once __DIR__ . '/Components/FunctionComponent.php';
-require_once __DIR__ . '/Components/InterfaceComponent.php';
 require_once __DIR__ . '/Components/NamespaceComponent.php';
+require_once __DIR__ . '/Components/VariableComponent.php';
 require_once __DIR__ . '/Components/ParamComponent.php';
 require_once __DIR__ . '/Components/PropertyComponent.php';
 require_once __DIR__ . '/Components/TraitComponent.php';
-require_once __DIR__ . '/Components/VariableComponent.php';
 
+require_once __DIR__ . '/Analyzers/ContentAnalyzer.php';
 require_once __DIR__ . '/Analyzers/InterfaceAnalyzer.php';
 require_once __DIR__ . '/Analyzers/ComponentAnalyzerLibrary.php';
 require_once __DIR__ . '/Analyzers/ClassAnalyzer.php';
-require_once __DIR__ . '/Analyzers/ContentAnalyzer.php';
 require_once __DIR__ . '/Analyzers/FileAnalyzer.php';
 require_once __DIR__ . '/Analyzers/FunctionAnalyzer.php';
 require_once __DIR__ . '/Analyzers/NamespaceAnalyzer.php';
