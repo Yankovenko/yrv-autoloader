@@ -4,8 +4,8 @@ namespace YRV\Autoloader\Parser;
 
 use YRV\Autoloader\Parser\Analyzers\FileAnalyzer;
 
-require_once __DIR__ . '/Components/InterfaceComponent.php';
 require_once __DIR__ . '/Components/PHPComponent.php';
+require_once __DIR__ . '/Components/InterfaceComponent.php';
 require_once __DIR__ . '/Components/ClassComponent.php';
 require_once __DIR__ . '/Components/FunctionComponent.php';
 require_once __DIR__ . '/Components/NamespaceComponent.php';
