@@ -6,16 +6,33 @@ use APCUIterator;
 
 abstract class Resolver
 {
+    static public string $apcuPrefix = 'j#MN';
+    static public int $apcuTtl = 86400;
     static protected string $baseDir;
-    static protected string $apcuPrefix = 'j#MN';
     static protected string $cacheDir = __DIR__ . '/../cache';
 
     static public string $composerAutoloaderFile = __DIR__ . '/../../vendor/autoload.php';
     static public bool $useComposerAlternative = true;
-
     static private bool $composerInited = false;
 
-    static function init($baseDir, $cacheDir = null, string|bool|null $composerAutoloaderFile = null, $prefixKey=null): void
+    /**
+     * @param $baseDir
+     * The root folder of project, must match of the Scanner used
+     *
+     * @param $cacheDir
+     * [optional] default use /../cache ,
+     * must match of the Scanner used
+     *
+     * @param string|bool $composerAutoloaderFile [optional]
+     * * true - use default composer as alternative,
+     * * false - not use anything
+     * * string - path to initialize your alternative autoloader - it will be the second after the current
+     *
+     * @param $prefixKey [optional] APCU prefix
+     *
+     * @return void
+     */
+    static function init($baseDir, $cacheDir = null, string|bool $composerAutoloaderFile = false, $prefixKey = null): void
     {
         self::$baseDir = $baseDir;
         if ($cacheDir) {
@@ -54,14 +71,10 @@ abstract class Resolver
 
         spl_autoload_unregister([self::class, 'resolve']);
     }
+
     static public function checkApcuEnabled(): bool
     {
         return (function_exists('apcu_enabled') && apcu_enabled());
-    }
-
-    static protected function hashUniqueKey($uniqueKey): string
-    {
-        return md5((string)$uniqueKey);
     }
 
     static public function flush(): bool
@@ -75,10 +88,24 @@ abstract class Resolver
         return true;
     }
 
-    static protected function preloading(): void
+    static private function preloading(): void
     {
-        if (is_file(self::$cacheDir .'/!required')) {
-            self::includeFiles(file_get_contents(self::$cacheDir .'/!required'));
+
+        if (self::checkApcuEnabled()) {
+            $files = apcu_fetch(self::$apcuPrefix . '_required');
+            if ($files !== false) {
+                self::includeFiles($files);
+                return;
+            }
+        }
+
+        $fileWithRequiredFiles = self::$cacheDir . DIRECTORY_SEPARATOR . '!required';
+        if (is_file($fileWithRequiredFiles)) {
+            $files = file_get_contents($fileWithRequiredFiles);
+            if (self::checkApcuEnabled()) {
+                apcu_store(self::$apcuPrefix . '_required', $files, self::$apcuTtl);
+            }
+            self::includeFiles($files);
         }
     }
 
@@ -100,28 +127,35 @@ abstract class Resolver
     static public function resolveWithoutApcu($classname): bool
     {
         $md5classname = md5($classname);
-        if (!file_exists(self::$cacheDir . $md5classname)) {
+
+        $filenames = @file_get_contents(self::$cacheDir . DIRECTORY_SEPARATOR . $md5classname);
+        if ($filenames === false) {
+            file_put_contents(
+                'php://stderr',
+                sprintf('The required file [%s] for the class [%s] was not found',
+                    $md5classname,
+                    $classname
+                )
+            );
             return self::noResults($classname);
         }
-
-        $filenames = file_get_contents(self::$cacheDir . $md5classname);
         self::includeFiles($filenames);
         return true;
     }
 
     static private function restore($key): bool
     {
-        if (!file_exists(self::$cacheDir . '/' . $key)) {
+        if (!file_exists(self::$cacheDir . DIRECTORY_SEPARATOR . $key)) {
             return false;
         }
 
-        $filenames = file_get_contents(self::$cacheDir . '/' .$key);
-        apcu_store(self::$apcuPrefix . $key, $filenames, 86400);
+        $filenames = file_get_contents(self::$cacheDir . DIRECTORY_SEPARATOR . $key);
+        apcu_store(self::$apcuPrefix . $key, $filenames, self::$apcuTtl);
         self::includeFiles($filenames);
         return true;
     }
 
-    static protected function includeFiles($files): void
+    static private function includeFiles($files): void
     {
         if (!trim($files)) {
             return;
@@ -134,7 +168,9 @@ abstract class Resolver
 
     static private function noResults($classname): bool
     {
-        file_put_contents('php://stderr', 'Autoloader: class not found: ' . $classname."\n");
+        file_put_contents('php://stderr',
+            sprintf('Class not found: %s', $classname)
+        );
 
         if (!self::$useComposerAlternative) {
             throw new \RuntimeException('Class "' . $classname . '" not found');
