@@ -14,6 +14,7 @@ require_once __DIR__ . '/Components/VariableComponent.php';
 require_once __DIR__ . '/Components/ParamComponent.php';
 require_once __DIR__ . '/Components/PropertyComponent.php';
 require_once __DIR__ . '/Components/TraitComponent.php';
+require_once __DIR__ . '/Components/EnumComponent.php';
 
 require_once __DIR__ . '/Analyzers/ContentAnalyzer.php';
 require_once __DIR__ . '/Analyzers/ComponentAnalyzerLibrary.php';
@@ -24,6 +25,7 @@ require_once __DIR__ . '/Analyzers/FunctionAnalyzer.php';
 require_once __DIR__ . '/Analyzers/NamespaceAnalyzer.php';
 require_once __DIR__ . '/Analyzers/ParamAnalyzer.php';
 require_once __DIR__ . '/Analyzers/TraitAnalyzer.php';
+require_once __DIR__ . '/Analyzers/EnumAnalyzer.php';
 
 class Scanner
 {
@@ -167,7 +169,11 @@ class Scanner
 
             $this->debug('Result scanning', $data);
 
+            $this->print("start check dependencies\n");
+
             $dependencies = $this->makeDependencies($data, $refResources);
+
+            $this->print("finish check dependencies\n");
 
             $this->debug('Dependencies', $dependencies);
 
@@ -175,9 +181,9 @@ class Scanner
 
             $this->makeIncludeFile($this->includeFiles);
 
-            echo "Process finished:";
-            echo "Create/updated cache files: {$this->stat['c']}\n";
-            echo "Create/updated dependencies files: {$this->stat['d']}\n";
+            $this->print("Process finished:\n");
+            $this->print("Create/updated cache files: {$this->stat['c']}\n");
+            $this->print("Create/updated dependencies files: {$this->stat['d']}\n");
 
         } catch (\Throwable $exception) {
             $this->addError($exception->getMessage());
@@ -394,23 +400,31 @@ class Scanner
             }
         }
         $fileHash = md5($file);
+        $this->print('Check file: ' . $file. ' - ');
         $fileCache = $this->cacheDirFiles . '/' . $fileHash;
         if (file_exists($fileCache) && $cache===null) {
             if (filemtime($fileCache) > filemtime($file)) {
                 try {
                     $result = unserialize(file_get_contents($fileCache));
+                    $this->print("from cache\n");
                     return $result;
-                } catch (\Throwable $exception) {}
+                } catch (\Throwable $exception) {
+                    $this->print("corrupted\n");
+                    @unlink($fileCache);
+                }
             }
         }
         try {
+            $this->print("analyze - ");
             $components = $this->fileAnalyzer->analyze($file);
+            $this->print("ok\n");
         } catch (\Throwable $exception) {
             $this->addError(
                 'Error analyze file [%s]: %s',
                 $file,
                 $exception->getMessage()
             );
+            $this->print("error\n");
             return null;
         }
 
@@ -544,16 +558,13 @@ class Scanner
         }
         $directory = new \RecursiveDirectoryIterator($dir);
         $iterator = new \RecursiveIteratorIterator($directory);
-        $files = array();
-        $data = [];
         foreach ($iterator as $info) {
             if ($iterator->getDepth()>2) {
                 continue;
             }
             /** @var $info SplFileInfo */
             if ($info->isFile() && $info->getFilename() == 'composer.json') {
-                $composerFilepath = realpath($info->getPath());
-                $this->scanComposerFile($composerFilepath, $addInclude);
+                $this->scanComposerFile($info, $addInclude);
             }
         }
     }
@@ -650,7 +661,7 @@ class Scanner
         $files = [];
         do {
             $item = current($subitems);
-            
+
             if (is_array($item)) {
                 array_push($subitems, ...$item);
                 continue;
@@ -724,5 +735,10 @@ class Scanner
             }
         }
         return array_keys($includes);
+    }
+
+    protected function print($str): void
+    {
+        echo $str;
     }
 }

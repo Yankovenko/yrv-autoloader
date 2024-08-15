@@ -16,6 +16,9 @@ class NamespaceComponent extends PhpComponent
     /** @var FunctionComponent[] */
     public array $functions = [];
 
+    /** @var EnumComponent[] */
+    public array $enums = [];
+
     /** @var InterfaceComponent[]  */
     public array $interfaces = [];
 
@@ -89,6 +92,9 @@ class NamespaceComponent extends PhpComponent
         foreach ($this->traits as $component) {
             $names[] = $prefix . $component->name;
         }
+        foreach ($this->enums as $component) {
+            $names[] = $prefix . $component->name;
+        }
         foreach ($this->interfaces as $component) {
             $names[] = $prefix . $component->name;
         }
@@ -111,9 +117,12 @@ class NamespaceComponent extends PhpComponent
         foreach ($this->traits as $component) {
             $relations = array_merge($relations, $component->traits ?? []);
         }
+        foreach ($this->enums as $component) {
+            $relations = array_merge($relations, $component->interfaces ?? []);
+            $relations = array_merge($relations, $component->traits ?? []);
+        }
 
         return array_unique($relations);
 
     }
-
 }

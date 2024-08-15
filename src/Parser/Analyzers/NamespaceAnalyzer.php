@@ -9,6 +9,7 @@ class NamespaceAnalyzer implements ContentAnalyzer
 {
     private ClassAnalyzer $classAnalyzer;
     private FunctionAnalyzer $functionAnalyzer;
+    private EnumAnalyzer $enumAnalyzer;
     private InterfaceAnalyzer $interfaceAnalyzer;
     private TraitAnalyzer $traitAnalyzer;
     use ComponentAnalyzerLibrary;
@@ -19,6 +20,7 @@ class NamespaceAnalyzer implements ContentAnalyzer
         $this->functionAnalyzer = $this->getFunctionAnalyzer();
         $this->interfaceAnalyzer = $this->getInterfaceAnalyzer();
         $this->traitAnalyzer = $this->getTraitAnalyzer();
+        $this->enumAnalyzer = $this->getEnumAnalyzer();
     }
 
     public function extract(array &$tokens, $deleteExtracted = false): Generator
@@ -118,6 +120,10 @@ class NamespaceAnalyzer implements ContentAnalyzer
 
             foreach ($this->traitAnalyzer->extract($namespaceTokens, true) as $traitComponent) {
                 $namespace->traits[] = $traitComponent;
+            }
+
+            foreach ($this->enumAnalyzer->extract($namespaceTokens, true) as $enumComponent) {
+                $namespace->enums[] = $enumComponent;
             }
 
             foreach ($this->interfaceAnalyzer->extract($namespaceTokens, true) as $interfaceComponent) {

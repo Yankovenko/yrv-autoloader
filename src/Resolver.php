@@ -11,7 +11,7 @@ abstract class Resolver
     static protected string $baseDir;
     static protected string $cacheDir = __DIR__ . '/../cache';
 
-    static public string $composerAutoloaderFile = __DIR__ . '/../../vendor/autoload.php';
+    static public string $composerAutoloaderFile = __DIR__ . '/../../../autoload.php';
     static public bool $useComposerAlternative = true;
     static private bool $composerInited = false;
 
@@ -173,14 +173,14 @@ abstract class Resolver
         );
 
         if (!self::$useComposerAlternative) {
-            throw new \RuntimeException('Class "' . $classname . '" not found');
+            return false;
         }
         if (!self::$composerInited) {
             self::autoloadUnregister();
             includeFile(self::$composerAutoloaderFile);
             self::autoloadRegister();
             self::$composerInited = true;
-            class_exists($classname);
+            return class_exists($classname);
         }
         return false;
     }

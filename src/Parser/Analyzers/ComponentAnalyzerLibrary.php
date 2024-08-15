@@ -10,6 +10,7 @@ trait ComponentAnalyzerLibrary
 
     protected static NamespaceAnalyzer $namespaceAnalyzerStatic;
     protected static ClassAnalyzer $classAnalyzerStatic;
+    protected static EnumAnalyzer $enumAnalyzerStatic;
     protected static InterfaceAnalyzer $interfaceAnalyzerStatic;
     protected static TraitAnalyzer $traitAnalyzerStatic;
     protected static FunctionAnalyzer $functionAnalyzerStatic;
@@ -35,6 +36,17 @@ trait ComponentAnalyzerLibrary
             static::$classAnalyzerStatic = new ClassAnalyzer();
         }
         return static::$classAnalyzerStatic;
+    }
+
+    /**
+     * @return EnumAnalyzer
+     */
+    public function getEnumAnalyzer(): EnumAnalyzer
+    {
+        if (!isset(static::$enumAnalyzerStatic)) {
+            static::$enumAnalyzerStatic = new EnumAnalyzer();
+        }
+        return static::$enumAnalyzerStatic;
     }
 
     /**

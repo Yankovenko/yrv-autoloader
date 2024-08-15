@@ -155,5 +155,29 @@ class ExamplesTest extends TestCase
         $this->assertEmpty($result['uc']);
 
     }
+
+
+    public function testEnumFile()
+    {
+        $scaner = new Scanner();
+        $result = $scaner->scanFile(__DIR__ . '/examples/Enum.php', false);
+
+        print_r ($result);
+
+        $this->assertEmpty($result['f']);
+        $this->assertEqualsCanonicalizing($result['o'], [
+            'EnumNS\EnumExample'
+        ]);
+        $this->assertEmpty($result['cf']);
+        $this->assertEqualsCanonicalizing([
+            'EnumNS\EnumInterface',
+            'GlobalEnumTrait',
+            'EnumNS\Relative\EnumTrait',
+        ], $result['r']);
+        $this->assertEmpty($result['c']);
+        $this->assertEmpty($result['uc']);
+
+    }
+
 }
 

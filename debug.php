@@ -6,8 +6,7 @@ use YRV\Autoloader\Parser\Scanner;
 
 require __DIR__ . '/src/Parser/Scanner.php';
 
-
-$baseDir = __DIR__ . '/../..';
+$baseDir = __DIR__ . '/../../..';
 
 $scanner = new Scanner($baseDir);
 
