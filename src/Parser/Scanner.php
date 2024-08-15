@@ -2,6 +2,7 @@
 
 namespace YRV\Autoloader\Parser;
 
+use SplFileInfo;
 use YRV\Autoloader\Parser\Analyzers\FileAnalyzer;
 
 require_once __DIR__ . '/Components/PHPComponent.php';
@@ -546,12 +547,11 @@ class Scanner
         $files = array();
         $data = [];
         foreach ($iterator as $info) {
-
             if ($iterator->getDepth()>2) {
                 continue;
             }
-
-            if ($info->getFilename() == 'composer.json') {
+            /** @var $info SplFileInfo */
+            if ($info->isFile() && $info->getFilename() == 'composer.json') {
                 $composerFilepath = realpath($info->getPath());
                 $this->scanComposerFile($composerFilepath, $addInclude);
             }
@@ -581,16 +581,14 @@ class Scanner
 
     public function scanComposerFile($file, $addInclude = false, $useDevelop = false): void
     {
-        $filename = null;
-        if ($file instanceof \SplFileInfo) {
+        if ($file instanceof SplFileInfo) {
             $filename = $file->getPathname();
         } elseif (is_file($file)) {
             $filename = $file;
         } elseif (is_file($this->baseDir . DIRECTORY_SEPARATOR . $file)) {
             $filename = $this->baseDir . DIRECTORY_SEPARATOR . $file;
         } else {
-            $filename = (string) $file;
-            $body = false;
+            return;
         }
         if ($filename) {
             $body = \file_get_contents($filename);
